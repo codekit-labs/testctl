@@ -41,3 +41,18 @@ test('throws a clear error on malformed yaml', () => {
   writeFileSync(join(dir, 'testctl.yaml'), 'stacks:\n  frappe:\n  - bad: : :\n');
   assert.throws(() => loadConfig(dir), /testctl\.yaml/);
 });
+
+test('loadConfig surfaces coverageMin when present', () => {
+  const dir = tmpProject();
+  writeFileSync(join(dir, 'testctl.yaml'), 'coverageMin: 70\nstacks:\n  flutter: {}\n');
+  const cfg = loadConfig(dir);
+  assert.equal(cfg.coverageMin, 70);
+  assert.deepEqual(cfg.stacks, { flutter: {} });
+});
+
+test('loadConfig omits coverageMin when absent', () => {
+  const dir = tmpProject();
+  writeFileSync(join(dir, 'testctl.yaml'), 'stacks:\n  flutter: {}\n');
+  const cfg = loadConfig(dir);
+  assert.equal('coverageMin' in cfg, false);
+});
