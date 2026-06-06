@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-06-06
+
+### Added
+- `production-ready` skill and `/testctl:production-ready` command: orchestrates the full loop —
+  discover apps → generate missing tests → run → fix failures → re-run (bounded to 3 rounds per
+  app) → readiness report (✅ green / ⚠️ partial / ⛔ blocked). Reuses generate-tests and
+  fix-failures; never auto-commits.
+- Quiet SessionStart hook: injects a one-line awareness of the testctl commands so Claude can
+  offer them when relevant. Never auto-runs and never repeats.
+
 ## [1.3.0] - 2026-06-06
 
 ### Added

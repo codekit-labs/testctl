@@ -70,6 +70,22 @@ It root-causes each failure (one at a time), applies a minimal fix to the app co
 corrects a genuinely-wrong test, never weakening one to pass — re-runs to green, and leaves
 changes uncommitted for review. Ambiguous or risky fixes are reported, not applied.
 
+## Make a project production-ready
+
+One command to drive the whole loop:
+
+```
+/testctl:production-ready            # discover → generate missing tests → run → fix → report
+/testctl:production-ready flutter    # only Flutter
+```
+
+It discovers every app, generates tests where missing, runs them, fixes failures (bounded to a
+few rounds per app), and prints a readiness report — ✅ green / ⚠️ partial / ⛔ needs-config —
+leaving all changes uncommitted for you to review and commit.
+
+A quiet SessionStart hook also makes Claude aware of these commands so it can offer the right
+one when you're working on tests; it never runs anything automatically.
+
 ## Use without Claude Code
 
 The same engine runs as a plain Node CLI (Node >= 20):
