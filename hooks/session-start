@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SessionStart hook for the testctl plugin — quiet awareness, never auto-runs.
+set -euo pipefail
+
+MSG="testctl is installed: /testctl:test-all (discover + run tests across the project), /testctl:generate-tests (write missing smoke + unit tests), /testctl:fix-failures (root-cause + fix red tests), /testctl:production-ready (drive a project to green: discover, generate, run, fix, report). When the user is working on testing, asks whether a project is production-ready, or wants tests run/written/fixed, OFFER the relevant command. Do not run anything automatically and do not repeat this notice."
+
+# Escape for JSON embedding (backslash, quote, control chars).
+escape_for_json() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+CTX="$(escape_for_json "$MSG")"
+
+# Claude Code expects hookSpecificOutput.additionalContext; others take top-level additionalContext.
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$CTX"
+else
+  printf '{\n  "additionalContext": "%s"\n}\n' "$CTX"
+fi
+exit 0
