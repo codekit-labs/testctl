@@ -175,6 +175,26 @@ stacks:
     path: ./
 ```
 
+### Remote Frappe over SSH
+
+Test a Frappe app on a remote bench by adding an `ssh` block (key or password). `benchPath` is
+the **remote** path:
+
+```yaml
+stacks:
+  frappe:
+    ssh: { host: frappe@1.2.3.4, key: ~/.ssh/id_rsa }   # key (recommended)
+    # or password via env var: ssh: { host: …, passwordEnv: TESTCTL_SSH_PASS }
+    benchPath: /home/frappe/erp-bench
+    site: demo.test          # a TEST site with allow_tests enabled — never production
+    apps: [your_app]
+```
+
+Password auth uses `sshpass` (install it) and reads the password from the env var named by
+`passwordEnv` — kept out of the file and the process list (never use `sshpass -p` on the command
+line). Prefer keys or `passwordEnv` over an inline `password`. Remote runs report pass/fail
+(coverage is local-only for now).
+
 ## Development
 
 ```bash

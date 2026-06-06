@@ -9968,53 +9968,96 @@ function parseFrappeJUnit(xml) {
   const passed = Math.max(0, tests - failed - skipped);
   return { passed, failed, skipped };
 }
+function buildSshArgs(ssh, remoteCommand) {
+  const args = ["-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10"];
+  if (ssh.key) args.push("-i", ssh.key);
+  if (ssh.port) args.push("-p", String(ssh.port));
+  args.push(ssh.host, remoteCommand);
+  return args;
+}
+function buildRemoteBenchCommand(benchPath, site, app, xmlPath) {
+  return `cd ${benchPath} && bench --site ${site} run-tests --app ${app} --junit-xml-output ${xmlPath}`;
+}
+function sshInvocation(ssh, remoteCommand, env = process.env) {
+  const base = buildSshArgs(ssh, remoteCommand);
+  const usesPassword = ssh.password != null || ssh.passwordEnv != null;
+  if (usesPassword) {
+    const password = ssh.password != null ? ssh.password : env[ssh.passwordEnv];
+    if (!password) return { error: `SSH password not set (export ${ssh.passwordEnv || "the password"})` };
+    return { command: "sshpass", args: ["-e", "ssh", ...base], childEnv: { SSHPASS: password } };
+  }
+  return { command: "ssh", args: ["-o", "BatchMode=yes", ...base], childEnv: {} };
+}
+function runSsh(ssh, remoteCommand) {
+  const inv = sshInvocation(ssh, remoteCommand, process.env);
+  if (inv.error) return { error: inv.error };
+  const proc = (0, import_node_child_process2.spawnSync)(inv.command, inv.args, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, ...inv.childEnv }
+  });
+  return { proc };
+}
 function runFrappe(cfg) {
   const start = Date.now();
   const { benchPath, site, apps } = cfg;
   if (!benchPath || !site || !Array.isArray(apps) || apps.length === 0) {
     return makeResult({ stack: "frappe", errored: true, error: "frappe config requires benchPath, site, and apps[]" });
   }
+  const remote = !!cfg.ssh;
   const logDir = (0, import_node_fs6.mkdtempSync)((0, import_node_path6.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
   const logPath = (0, import_node_path6.join)(logDir, "frappe.log");
   let logBuf = "";
   const totals = { passed: 0, failed: 0, skipped: 0 };
   const appErrors = [];
   for (const app of apps) {
-    const xmlPath = (0, import_node_path6.join)(logDir, `${app}.xml`);
-    const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
-    if (cfg.coverage) args.push("--coverage");
-    const proc = (0, import_node_child_process2.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    logBuf += `
+    let xmlText = null;
+    if (remote) {
+      const remoteXml = `/tmp/testctl-${app}.xml`;
+      const run = runSsh(cfg.ssh, buildRemoteBenchCommand(benchPath, site, app, remoteXml));
+      if (run.error) {
+        appErrors.push(`${app}: ${run.error}`);
+        continue;
+      }
+      logBuf += `
+$ ssh ${cfg.ssh.host} (bench run-tests --app ${app})
+${run.proc.stdout || ""}${run.proc.stderr || ""}`;
+      if (run.proc.error) {
+        const msg = run.proc.error.code === "ENOENT" ? "sshpass not installed \u2014 install it or use key auth" : `remote bench failed: ${run.proc.error.message}`;
+        appErrors.push(`${app}: ${msg}`);
+        continue;
+      }
+      const cat = runSsh(cfg.ssh, `cat ${remoteXml}`);
+      if (!cat.error && cat.proc && !cat.proc.error && cat.proc.status === 0 && (cat.proc.stdout || "").includes("<testsuite")) {
+        xmlText = cat.proc.stdout;
+      }
+      runSsh(cfg.ssh, `rm -f ${remoteXml}`);
+    } else {
+      const xmlPath = (0, import_node_path6.join)(logDir, `${app}.xml`);
+      const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
+      if (cfg.coverage) args.push("--coverage");
+      const proc = (0, import_node_child_process2.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      logBuf += `
 $ bench ${args.join(" ")}
 ${proc.stdout || ""}${proc.stderr || ""}`;
-    if (proc.error) {
-      appErrors.push(`${app}: failed to run bench: ${proc.error.message}`);
-      continue;
+      if (proc.error) {
+        appErrors.push(`${app}: failed to run bench: ${proc.error.message}`);
+        continue;
+      }
+      if ((0, import_node_fs6.existsSync)(xmlPath)) xmlText = (0, import_node_fs6.readFileSync)(xmlPath, "utf8");
     }
-    if ((0, import_node_fs6.existsSync)(xmlPath)) {
-      const r = parseFrappeJUnit((0, import_node_fs6.readFileSync)(xmlPath, "utf8"));
+    if (xmlText) {
+      const r = parseFrappeJUnit(xmlText);
       totals.passed += r.passed;
       totals.failed += r.failed;
       totals.skipped += r.skipped;
     } else {
-      appErrors.push(`${app}: no JUnit output (is allow_tests enabled for the site?)`);
+      appErrors.push(`${app}: no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`);
     }
   }
   (0, import_node_fs6.writeFileSync)(logPath, logBuf);
-  if (appErrors.length) {
-    return makeResult({
-      stack: "frappe",
-      passed: totals.passed,
-      failed: totals.failed,
-      skipped: totals.skipped,
-      durationMs: Date.now() - start,
-      rawLogPath: logPath,
-      errored: true,
-      error: appErrors.join("; ")
-    });
-  }
   let coverage = null;
-  if (cfg.coverage) {
+  if (cfg.coverage && !remote) {
     for (const p of [(0, import_node_path6.join)(benchPath, "sites", "coverage.xml"), (0, import_node_path6.join)(benchPath, "coverage.xml")]) {
       try {
         if ((0, import_node_fs6.existsSync)(p)) {
@@ -10026,7 +10069,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       }
     }
   }
-  return makeResult({
+  const base = {
     stack: "frappe",
     passed: totals.passed,
     failed: totals.failed,
@@ -10034,7 +10077,9 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
     durationMs: Date.now() - start,
     rawLogPath: logPath,
     coverage
-  });
+  };
+  if (appErrors.length) return makeResult({ ...base, errored: true, error: appErrors.join("; ") });
+  return makeResult(base);
 }
 
 // lib/runners/flutter.mjs

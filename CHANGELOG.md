@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-06-06
+
+### Added
+- Remote Frappe over SSH: a `frappe.ssh` config (`{ host, key | passwordEnv | password, port }`)
+  runs `bench run-tests` on a remote bench and pulls the JUnit XML back. Key-based, or password
+  via `sshpass -e` (password supplied through the `SSHPASS` env — never on the command line).
+  Remote runs report pass/fail; use a test site with `allow_tests`, never production.
+
 ## [1.8.0] - 2026-06-06
 
 ### Added
