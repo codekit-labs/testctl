@@ -34,17 +34,17 @@ function cmdInit(projectDir) {
   return 0;
 }
 
-async function runTarget(target) {
+async function runTarget(target, coverage = false) {
   if (target.notice) {
     return makeResult({ stack: target.stack, present: true, label: target.label, note: target.note });
   }
   let result;
   if (target.stack === 'frappe') {
-    result = runFrappe(target.config || {});
+    result = runFrappe({ ...(target.config || {}), coverage });
   } else if (target.stack === 'flutter') {
-    result = runFlutter({ path: target.path });
+    result = runFlutter({ path: target.path, coverage });
   } else if (target.stack === 'electron') {
-    result = runElectron({ path: target.path });
+    result = runElectron({ path: target.path, coverage });
   } else if (target.stack === 'nextjs') {
     result = runNextjs(target.config || {});
   } else if (target.stack === 'supabase') {
@@ -57,7 +57,7 @@ async function runTarget(target) {
   return result;
 }
 
-async function cmdRun(projectDir, only) {
+async function cmdRun(projectDir, only, coverage = false) {
   const config = loadConfig(projectDir);
   const targets = discoverTargets(projectDir, config, only);
 
@@ -77,7 +77,7 @@ async function cmdRun(projectDir, only) {
       const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
       console.log(`\n▶ Running ${name}...`);
     }
-    results.push(await runTarget(t));
+    results.push(await runTarget(t, coverage));
   }
 
   console.log('\n' + formatReport(results));
@@ -110,14 +110,17 @@ async function main() {
   if (cmd === 'init') return process.exit(cmdInit(projectDir));
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'run') {
-    const only = arg && STACKS.includes(arg) ? arg : null;
-    if (arg && !only) {
-      console.error(`Unknown stack "${arg}". Valid: ${STACKS.join(', ')}`);
+    const rest = process.argv.slice(3);
+    const coverage = rest.includes('--coverage');
+    const positionals = rest.filter((a) => !a.startsWith('--'));
+    const only = positionals[0] && STACKS.includes(positionals[0]) ? positionals[0] : null;
+    if (positionals[0] && !only) {
+      console.error(`Unknown stack "${positionals[0]}". Valid: ${STACKS.join(', ')}`);
       return process.exit(2);
     }
-    return process.exit(await cmdRun(projectDir, only));
+    return process.exit(await cmdRun(projectDir, only, coverage));
   }
-  console.log('Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
