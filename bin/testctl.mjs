@@ -3,6 +3,7 @@ import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
+import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
@@ -58,7 +59,7 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4) {
   const config = loadConfig(projectDir);
   const targets = discoverTargets(projectDir, config, only);
 
@@ -72,14 +73,15 @@ async function cmdRun(projectDir, only, coverage = false) {
     }
   }
 
-  const results = [];
-  for (const t of targets) {
-    if (!t.notice) {
-      const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
-      console.log(`\n▶ Running ${name}...`);
+  const runnable = targets.filter((t) => !t.notice).length;
+  if (runnable > 0) console.log(`\n▶ Running ${runnable} app(s) (concurrency ${concurrency})...`);
+  const results = await mapPool(targets, concurrency, async (t) => {
+    try {
+      return await runTarget(t, coverage);
+    } catch (e) {
+      return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
     }
-    results.push(await runTarget(t, coverage));
-  }
+  });
 
   console.log('\n' + formatReport(results));
   const code = computeExitCode(results);
@@ -126,9 +128,11 @@ async function main() {
       console.error(`Unknown stack "${positionals[0]}". Valid: ${STACKS.join(', ')}`);
       return process.exit(2);
     }
-    return process.exit(await cmdRun(projectDir, only, coverage));
+    const concEntry = rest.find((a) => a.startsWith('--concurrency='));
+    const concurrency = Math.max(1, Math.floor(Number((concEntry || '').split('=')[1])) || 4);
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--concurrency=N]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
