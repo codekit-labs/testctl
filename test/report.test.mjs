@@ -81,3 +81,14 @@ test('formatReport shows a coverage column (N% and —)', () => {
   assert.match(out, /72%/);
   assert.match(out, /—/);
 });
+test('formatReport appends the gate note on a normal row', () => {
+  const results = [makeResult({ stack: 'flutter', label: 'a', passed: 12, failed: 0, skipped: 0, durationMs: 4000, coverage: 64, note: 'coverage 64% < min 70%', ok: false })];
+  const out = formatReport(results);
+  assert.match(out, /cov 64%/);
+  assert.match(out, /⚠ coverage 64% < min 70%/);
+});
+test('formatReport omits the note marker when there is no note', () => {
+  const results = [makeResult({ stack: 'flutter', label: 'a', passed: 12, failed: 0, skipped: 0, durationMs: 4000, coverage: 64 })];
+  const out = formatReport(results);
+  assert.equal(out.includes('⚠'), false);
+});
