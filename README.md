@@ -123,7 +123,28 @@ testctl run --coverage flutter
 ```
 
 Coverage is opt-in — normal runs stay fast and write no coverage artifacts. It's reported and
-recorded, but never affects the pass/fail exit code.
+recorded, and (unless you set a gate, below) never affects the pass/fail exit code.
+
+### Coverage gates
+
+Turn coverage into a pass/fail gate:
+
+```
+testctl run --min-coverage=70        # fail any app below 70% line coverage
+```
+
+`--min-coverage` implies `--coverage`. You can also set a default in `testctl.yaml`:
+
+```yaml
+coverageMin: 70
+stacks:
+  # ...
+```
+
+The command-line flag overrides the config value. An app whose measured coverage is below the
+threshold fails the run (exit 1) and shows the reason on its row
+(`⚠ coverage X% < min Y%`). Apps that don't report line coverage (Next.js, Supabase) are never
+gated.
 
 ## Parallel runs
 

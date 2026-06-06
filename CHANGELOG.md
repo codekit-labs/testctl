@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] - 2026-06-06
+
+### Added
+- Coverage gates: `testctl run --min-coverage=N` (or `coverageMin: N` in `testctl.yaml`; the flag
+  wins) fails the run (exit 1) for any app whose measured line coverage is below N, with the reason
+  shown on its report row (`⚠ coverage X% < min Y%`). `--min-coverage` implies `--coverage`. Apps
+  that can't measure coverage (Next.js, Supabase, or `--coverage` off) are never gated.
+
 ## [1.10.0] - 2026-06-06
 
 ### Changed
