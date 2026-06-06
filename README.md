@@ -146,6 +146,12 @@ threshold fails the run (exit 1) and shows the reason on its row
 (`⚠ coverage X% < min Y%`). Apps that don't report line coverage (Next.js, Supabase) are never
 gated.
 
+When you run `/testctl:production-ready` with a gate configured, an app that has tests but is
+below the gate is topped up automatically: testctl generates tests aimed at the uncovered logic,
+re-measures, and (within 3 rounds) either lifts it over the gate or reports it as ⚠️ partial with
+the real coverage numbers. Without a gate, `production-ready` only generates tests for apps that
+have none.
+
 ## Parallel runs
 
 Apps run concurrently by default (up to 4 at once). Tune it:

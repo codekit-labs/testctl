@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.12.0] - 2026-06-06
+
+### Changed
+- `production-ready` (and `/testctl:production-ready`) now raises coverage: when a gate is
+  configured (`coverageMin:` in `testctl.yaml` or `--min-coverage=N`), an app that has tests but
+  is below the gate is treated like an untested app — it generates more tests targeting uncovered
+  logic, re-measures, and (bounded to the same 3 rounds) either crosses the gate or is reported as
+  ⚠️ partial with the real numbers. With no gate set, behaviour is unchanged. Skill-only change;
+  the engine and bundle are untouched.
+
 ## [1.11.0] - 2026-06-06
 
 ### Added
