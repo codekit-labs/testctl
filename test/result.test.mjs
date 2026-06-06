@@ -28,3 +28,15 @@ test('makeResult supports not-present and errored states', () => {
   assert.equal(errored.ok, false);
   assert.equal(errored.error, 'flutter not found');
 });
+
+test('makeResult defaults label to the stack name and note to null', () => {
+  const r = makeResult({ stack: 'flutter' });
+  assert.equal(r.label, 'flutter');
+  assert.equal(r.note, null);
+});
+
+test('makeResult accepts an explicit label and note', () => {
+  const r = makeResult({ stack: 'flutter', label: 'apps/pos', note: 'needs config' });
+  assert.equal(r.label, 'apps/pos');
+  assert.equal(r.note, 'needs config');
+});
