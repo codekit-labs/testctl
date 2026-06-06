@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="my_app" tests="5" failures="1" errors="0" skipped="1" time="3.21">
+    <testcase classname="TestInvoice" name="test_create" time="0.5"/>
+    <testcase classname="TestInvoice" name="test_validate" time="0.4">
+      <failure message="AssertionError">expected 100 got 90</failure>
+    </testcase>
+    <testcase classname="TestInvoice" name="test_skip" time="0.0">
+      <skipped/>
+    </testcase>
+    <testcase classname="TestInvoice" name="test_a" time="0.3"/>
+    <testcase classname="TestInvoice" name="test_b" time="0.2"/>
+  </testsuite>
+</testsuites>

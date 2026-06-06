@@ -1,0 +1,7 @@
+1..5
+ok 1 - users table exists
+ok 2 - rls enabled on users
+not ok 3 - anon cannot select users
+# Failed test 'anon cannot select users'
+ok 4 - admin can insert # SKIP needs seed data
+ok 5 - email column is unique

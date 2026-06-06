@@ -1,0 +1,13 @@
+{
+  "name": "testctl",
+  "owner": {
+    "name": "codekit-labs"
+  },
+  "plugins": [
+    {
+      "name": "testctl",
+      "source": "./",
+      "description": "Unified multi-stack test runner: Frappe, Flutter, Electron, Next.js (Vercel), Supabase."
+    }
+  ]
+}

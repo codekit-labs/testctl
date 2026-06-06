@@ -1,0 +1,9 @@
+{"type":"testStart","test":{"id":1,"name":"loading /app_test.dart","hidden":true},"time":0}
+{"type":"testDone","testID":1,"result":"success","skipped":false,"hidden":true,"time":5}
+{"type":"testStart","test":{"id":2,"name":"counter increments","hidden":false},"time":6}
+{"type":"testDone","testID":2,"result":"success","skipped":false,"hidden":false,"time":40}
+{"type":"testStart","test":{"id":3,"name":"shows error banner","hidden":false},"time":41}
+{"type":"testDone","testID":3,"result":"failure","skipped":false,"hidden":false,"time":80}
+{"type":"testStart","test":{"id":4,"name":"skipped case","hidden":false},"time":81}
+{"type":"testDone","testID":4,"result":"success","skipped":true,"hidden":false,"time":82}
+{"type":"done","success":false,"time":90}
