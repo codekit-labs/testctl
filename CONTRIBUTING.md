@@ -38,3 +38,20 @@ returning the uniform `makeResult` shape, a label in `lib/report.mjs`, and a bra
 
 Keep changes focused, include tests, and make sure `npm test` and `npm run build` are clean
 before opening a PR.
+
+## Fine-tuning
+
+testctl has two layers — tune the right one:
+
+- **Behavior (skills, markdown):** how Claude generates/fixes/orchestrates lives in
+  `skills/*/SKILL.md` and `skills/generate-tests/stack-conventions.md`. Edit these to change
+  test patterns, rules, or stop-on-risk thresholds. No build needed.
+- **Engine (`lib/`, code):** detection, parsing, history, the runners. Change via TDD
+  (`npm test`), then `npm run build` to refresh `dist/testctl.cjs`.
+
+**The loop:** edit → `npm test` → `npm run build` (if engine) → bump version + CHANGELOG →
+commit → push → `/plugin update testctl` → `/reload-plugins`.
+
+**Capturing cases:** when a generated test or fix is wrong, open a `tuning_feedback` issue with
+the diff and the desired behavior, then encode the lesson as a rule in the relevant SKILL.md or
+a guard/test in the engine.
