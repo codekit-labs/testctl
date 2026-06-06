@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { writeFileSync, existsSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
+import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
@@ -95,13 +96,27 @@ async function cmdRun(projectDir, only) {
     .filter((r) => r.present && !r.ok)
     .map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
   console.log('TESTCTL_JSON ' + JSON.stringify({ results, failedLogs }));
+  appendHistory(projectDir, historyEntry(results, new Date().toISOString()));
   return code;
+}
+
+function cmdReport(projectDir) {
+  const path = join(projectDir, '.testctl', 'history.jsonl');
+  let text = '';
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    text = '';
+  }
+  console.log(formatHistoryReport(summarize(text)));
+  return 0;
 }
 
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
   if (cmd === 'init') return process.exit(cmdInit(projectDir));
+  if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'run') {
     const only = arg && STACKS.includes(arg) ? arg : null;
     if (arg && !only) {
@@ -110,7 +125,7 @@ async function main() {
     }
     return process.exit(await cmdRun(projectDir, only));
   }
-  console.log('Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase]');
+  console.log('Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
