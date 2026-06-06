@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-06-06
+
+### Added
+- `generate-tests` skill and `/testctl:generate-tests` command: Claude writes runnable smoke +
+  unit-logic tests for untested apps across Flutter, Electron, Next.js, Frappe, and Supabase,
+  runs them to green, and leaves them in the working tree for review (never auto-commits;
+  Frappe tests only run against an `allow_tests` site).
+
 ## [1.1.1] - 2026-06-06
 
 ### Fixed

@@ -42,6 +42,20 @@ When a new version is released, refresh the marketplace and update the plugin:
 (Or use the interactive `/plugin` menu → select `testctl` → Update.) Check your installed
 version any time with `/plugin`.
 
+## Generating tests
+
+For an app that has few or no tests, let the plugin write them:
+
+```
+/testctl:generate-tests              # find untested apps and add smoke + unit tests
+/testctl:generate-tests flutter      # only Flutter apps
+/testctl:generate-tests ./apps/pos   # one app by path
+```
+
+It writes new test files (never overwriting existing ones), runs them until green, and leaves
+them uncommitted for you to review and commit. Frappe tests are only run against a site with
+`allow_tests` enabled.
+
 ## Use without Claude Code
 
 The same engine runs as a plain Node CLI (Node >= 20):
