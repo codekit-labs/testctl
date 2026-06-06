@@ -122,6 +122,11 @@ Exit code is `0` only if every stack that ran passed.
 
 ## Configuration (`testctl.yaml`)
 
+Run `testctl init` to **auto-generate** this file: it detects your stacks, pre-fills the Frappe
+bench/app it finds (scanning `~/frappe-bench*`) and a Next.js block, and marks anything it can't
+be sure of with `<FILL-ME>`. Flutter/Electron/Supabase apps need no config — they're
+auto-discovered.
+
 All stacks are optional; absent ones are simply skipped.
 
 ```yaml

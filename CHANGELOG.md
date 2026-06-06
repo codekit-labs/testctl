@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-06-06
+
+### Changed
+- `testctl init` is now project-aware: it detects stacks, pre-fills a Frappe block (scanning
+  `~/frappe-bench*` for the bench that has your app, and listing that bench's sites) and a
+  Next.js block, notes auto-discovered Flutter/Electron/Supabase apps, and marks uncertain
+  values with `<FILL-ME>`. Existing `testctl.yaml` files are never overwritten.
+
 ## [1.5.0] - 2026-06-06
 
 ### Added
