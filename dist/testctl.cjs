@@ -9597,11 +9597,18 @@ function discoverTargets(root, config = {}, onlyStack = null) {
     }
     targets.push({ stack: "nextjs", config: cfg.nextjs, label: "nextjs" });
   }
-  const fc = cfg.frappe;
-  const frappeComplete = fc && fc.benchPath && fc.site && Array.isArray(fc.apps) && fc.apps.length > 0;
-  if (frappeComplete) {
-    targets.push({ stack: "frappe", config: fc, label: "frappe" });
-  } else if (fc || hasFrappeMarker(root)) {
+  const frappeList = Array.isArray(cfg.frappe) ? cfg.frappe : cfg.frappe ? [cfg.frappe] : [];
+  const multi = frappeList.length > 1;
+  for (const fc of frappeList) {
+    const label = multi ? fc && fc.site ? String(fc.site) : "frappe" : "frappe";
+    const complete = fc && fc.benchPath && fc.site && Array.isArray(fc.apps) && fc.apps.length > 0;
+    if (complete) {
+      targets.push({ stack: "frappe", config: fc, label });
+    } else {
+      targets.push({ stack: "frappe", label, notice: true, note: "needs benchPath, site, apps in testctl.yaml" });
+    }
+  }
+  if (frappeList.length === 0 && hasFrappeMarker(root)) {
     targets.push({ stack: "frappe", label: "frappe", notice: true, note: "needs benchPath, site, apps in testctl.yaml" });
   }
   return onlyStack ? targets.filter((t) => t.stack === onlyStack) : targets;
