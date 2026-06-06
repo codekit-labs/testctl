@@ -9899,7 +9899,6 @@ function computeExitCode(results) {
 }
 function formatReport(results) {
   const present = results.filter((r) => r.present);
-  const absent = results.filter((r) => !r.present);
   const lines = ["Test results", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"];
   for (const r of present) {
     const name = displayName(r);
@@ -9921,9 +9920,6 @@ function formatReport(results) {
       `cov ${r.coverage != null ? r.coverage + "%" : "\u2014"}`
     ].join("  ");
     lines.push(r.note ? `${row}  \u26A0 ${r.note}` : row);
-  }
-  for (const r of absent) {
-    lines.push(`  (${LABELS[r.stack] || r.stack}: not present)`);
   }
   return lines.join("\n");
 }

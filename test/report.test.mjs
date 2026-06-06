@@ -24,18 +24,15 @@ test('computeExitCode is 1 when any stack errored', () => {
   assert.equal(computeExitCode(results), 1);
 });
 
-test('formatReport lists present stacks and notes absent ones', () => {
+test('formatReport lists present stacks', () => {
   const results = [
     makeResult({ stack: 'frappe', passed: 42, failed: 0, skipped: 1, durationMs: 18200 }),
-    makeResult({ stack: 'flutter', present: false }),
     makeResult({ stack: 'electron', passed: 15, failed: 0, durationMs: 6100 }),
   ];
   const out = formatReport(results);
   assert.match(out, /Frappe/);
   assert.match(out, /Electron/);
   assert.match(out, /42/);
-  assert.match(out, /Flutter/);
-  assert.match(out, /not present/i);
 });
 
 test('formatReport shows an errored stack with its message', () => {

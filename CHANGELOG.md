@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.12.1] - 2026-06-06
+
+### Removed
+- Internal cleanup: dropped the unused `detectStacks` helper (superseded by the discovery walk)
+  and the report's never-reached "not present" branch. No behaviour change — discovery already
+  only yields apps that exist.
+
 ## [1.12.0] - 2026-06-06
 
 ### Changed
