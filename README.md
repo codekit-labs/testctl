@@ -56,6 +56,20 @@ It writes new test files (never overwriting existing ones), runs them until gree
 them uncommitted for you to review and commit. Frappe tests are only run against a site with
 `allow_tests` enabled.
 
+## Fixing failures
+
+When tests are red, let the plugin diagnose and fix them:
+
+```
+/testctl:fix-failures              # fix failures across the project
+/testctl:fix-failures flutter      # only Flutter
+/testctl:fix-failures ./apps/pos   # one app by path
+```
+
+It root-causes each failure (one at a time), applies a minimal fix to the app code — or
+corrects a genuinely-wrong test, never weakening one to pass — re-runs to green, and leaves
+changes uncommitted for review. Ambiguous or risky fixes are reported, not applied.
+
 ## Use without Claude Code
 
 The same engine runs as a plain Node CLI (Node >= 20):

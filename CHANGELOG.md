@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-06-06
+
+### Added
+- `fix-failures` skill and `/testctl:fix-failures` command: Claude root-causes failing tests
+  (one at a time, via the systematic-debugging skill), applies a minimal fix to the app code or
+  corrects a genuinely-wrong test (never weakening a test to pass), re-runs to green, and leaves
+  changes uncommitted for review. Ambiguous/architectural/behavior-changing fixes are reported,
+  not applied. Frappe tests only run against an `allow_tests` site.
+
 ## [1.2.0] - 2026-06-06
 
 ### Added
