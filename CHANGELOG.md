@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-06-06
+
+### Changed
+- README: corrected the command to the namespaced `/testctl:test-all`, added an **Updating**
+  section (`/plugin marketplace update` + `/plugin update` + `/reload-plugins`), and noted
+  plain-language invocation.
+- Tuned the `test-all` skill description so natural-language requests ("run all tests",
+  "test this project") reliably trigger it.
+
 ## [1.0.0] - 2026-06-06
 
 ### Added

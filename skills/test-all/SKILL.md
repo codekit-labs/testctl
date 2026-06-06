@@ -1,6 +1,6 @@
 ---
 name: test-all
-description: Run Frappe, Flutter, Electron, Next.js (Vercel) and/or Supabase tests for the current project and analyze any failures. Use when the user types /test-all, asks to "run all tests", "test the project", or wants a unified test report across their stacks.
+description: Run Frappe, Flutter, Electron, Next.js (Vercel) and/or Supabase tests for the current project and analyze any failures. Use when the user runs /testctl:test-all, or says any of "run all tests", "run the tests", "test this project", "test the app", "check my tests", "are my tests passing", or otherwise wants a unified test report across their stacks.
 ---
 
 # test-all

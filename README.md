@@ -15,16 +15,32 @@ as a **Claude Code plugin**, so failures are explained inline.
 ```
 /plugin marketplace add codekit-labs/testctl
 /plugin install testctl
+/reload-plugins
 ```
 
-Then, in any project:
+Then, in any project (plugin commands are namespaced by the plugin name):
 
 ```
-/test-all              # run every detected stack, analyze failures
-/test-all nextjs       # run a single stack
+/testctl:test-all              # run every detected stack, analyze failures
+/testctl:test-all nextjs       # run a single stack
 ```
 
-The engine is bundled and dependency-free — nothing to `npm install`.
+You can also just ask in plain language — e.g. *"run all the tests for this project"* —
+and the bundled skill handles it. The engine is bundled and dependency-free — nothing to
+`npm install`.
+
+## Updating
+
+When a new version is released, refresh the marketplace and update the plugin:
+
+```
+/plugin marketplace update testctl
+/plugin update testctl
+/reload-plugins
+```
+
+(Or use the interactive `/plugin` menu → select `testctl` → Update.) Check your installed
+version any time with `/plugin`.
 
 ## Use without Claude Code
 
