@@ -90,3 +90,41 @@ test('Frappe with INCOMPLETE config (missing site/apps) is a notice, not a faili
 test('empty project yields no targets', () => {
   assert.deepEqual(discoverTargets(tmp(), {}), []);
 });
+
+test('Frappe as a list of two complete sites yields two targets labeled by site', () => {
+  const root = tmp();
+  const cfg = { stacks: { frappe: [
+    { benchPath: '/b', site: 'site_a', apps: ['a'] },
+    { benchPath: '/b', site: 'site_b', apps: ['b'] },
+  ] } };
+  const fr = discoverTargets(root, cfg).filter((t) => t.stack === 'frappe');
+  assert.equal(fr.length, 2);
+  assert.deepEqual(fr.map((t) => t.label).sort(), ['site_a', 'site_b']);
+  for (const t of fr) { assert.notEqual(t.notice, true); assert.ok(t.config); }
+  assert.equal(fr.find((t) => t.label === 'site_a').config.apps[0], 'a');
+});
+
+test('Frappe list mixing complete + incomplete yields one target and one notice, labeled by site', () => {
+  const root = tmp();
+  const cfg = { stacks: { frappe: [
+    { benchPath: '/b', site: 'good', apps: ['a'] },
+    { benchPath: '/b', site: 'bad' },
+  ] } };
+  const fr = discoverTargets(root, cfg).filter((t) => t.stack === 'frappe');
+  assert.equal(fr.length, 2);
+  const good = fr.find((t) => t.label === 'good');
+  const bad = fr.find((t) => t.label === 'bad');
+  assert.notEqual(good.notice, true);
+  assert.ok(good.config);
+  assert.equal(bad.notice, true);
+  assert.equal(bad.config, undefined);
+});
+
+test('Frappe single-element list keeps the legacy "frappe" label', () => {
+  const root = tmp();
+  const cfg = { stacks: { frappe: [{ benchPath: '/b', site: 's', apps: ['a'] }] } };
+  const fr = discoverTargets(root, cfg).filter((t) => t.stack === 'frappe');
+  assert.equal(fr.length, 1);
+  assert.equal(fr[0].label, 'frappe');
+  assert.ok(fr[0].config);
+});
