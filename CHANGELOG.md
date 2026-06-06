@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] - 2026-06-06
+
+### Changed
+- Discovered apps now run **in parallel** (default concurrency 4; `testctl run --concurrency=N`,
+  `--concurrency=1` for sequential). Runners use async spawn under the hood; report, exit code,
+  and history are unchanged (results stay in discovery order) — just faster on monorepos.
+
 ## [1.9.0] - 2026-06-06
 
 ### Added

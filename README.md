@@ -125,6 +125,17 @@ testctl run --coverage flutter
 Coverage is opt-in — normal runs stay fast and write no coverage artifacts. It's reported and
 recorded, but never affects the pass/fail exit code.
 
+## Parallel runs
+
+Apps run concurrently by default (up to 4 at once). Tune it:
+
+```
+testctl run --concurrency=8     # more parallelism
+testctl run --concurrency=1     # sequential
+```
+
+Results and exit code are identical to sequential — just faster on multi-app repos.
+
 ## Use without Claude Code
 
 The same engine runs as a plain Node CLI (Node >= 20):

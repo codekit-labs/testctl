@@ -9605,6 +9605,25 @@ function discoverTargets(root, config = {}, onlyStack = null) {
   return onlyStack ? targets.filter((t) => t.stack === onlyStack) : targets;
 }
 
+// lib/pool.mjs
+async function mapPool(items, limit, fn) {
+  const n = items.length;
+  const results = new Array(n);
+  const max = Math.max(1, Math.floor(limit) || 1);
+  let next = 0;
+  async function worker() {
+    while (next < n) {
+      const i = next;
+      next += 1;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = [];
+  for (let w = 0; w < Math.min(max, n); w += 1) workers.push(worker());
+  await Promise.all(workers);
+  return results;
+}
+
 // lib/history.mjs
 var import_node_fs4 = require("node:fs");
 var import_node_path4 = require("node:path");
@@ -9906,8 +9925,38 @@ function formatReport(results) {
   return lines.join("\n");
 }
 
-// lib/runners/frappe.mjs
+// lib/spawn.mjs
 var import_node_child_process2 = require("node:child_process");
+function spawnAsync(command, args = [], opts = {}) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = (0, import_node_child_process2.spawn)(command, args, { cwd: opts.cwd, env: opts.env || process.env });
+    } catch (error) {
+      resolve({ status: null, stdout: "", stderr: "", error });
+      return;
+    }
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const done = (r) => {
+      if (!settled) {
+        settled = true;
+        resolve(r);
+      }
+    };
+    if (child.stdout) child.stdout.on("data", (d) => {
+      stdout += d.toString("utf8");
+    });
+    if (child.stderr) child.stderr.on("data", (d) => {
+      stderr += d.toString("utf8");
+    });
+    child.on("error", (error) => done({ status: null, stdout, stderr, error }));
+    child.on("close", (code) => done({ status: code, stdout, stderr, error: null }));
+  });
+}
+
+// lib/runners/frappe.mjs
 var import_node_fs6 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path6 = require("node:path");
@@ -9988,17 +10037,13 @@ function sshInvocation(ssh, remoteCommand, env = process.env) {
   }
   return { command: "ssh", args: ["-o", "BatchMode=yes", ...base], childEnv: {} };
 }
-function runSsh(ssh, remoteCommand) {
+async function runSsh(ssh, remoteCommand) {
   const inv = sshInvocation(ssh, remoteCommand, process.env);
   if (inv.error) return { error: inv.error };
-  const proc = (0, import_node_child_process2.spawnSync)(inv.command, inv.args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, ...inv.childEnv }
-  });
+  const proc = await spawnAsync(inv.command, inv.args, { env: { ...process.env, ...inv.childEnv } });
   return { proc };
 }
-function runFrappe(cfg) {
+async function runFrappe(cfg) {
   const start = Date.now();
   const { benchPath, site, apps } = cfg;
   if (!benchPath || !site || !Array.isArray(apps) || apps.length === 0) {
@@ -10014,7 +10059,7 @@ function runFrappe(cfg) {
     let xmlText = null;
     if (remote) {
       const remoteXml = `/tmp/testctl-${app}.xml`;
-      const run = runSsh(cfg.ssh, buildRemoteBenchCommand(benchPath, site, app, remoteXml));
+      const run = await runSsh(cfg.ssh, buildRemoteBenchCommand(benchPath, site, app, remoteXml));
       if (run.error) {
         appErrors.push(`${app}: ${run.error}`);
         continue;
@@ -10027,16 +10072,16 @@ ${run.proc.stdout || ""}${run.proc.stderr || ""}`;
         appErrors.push(`${app}: ${msg}`);
         continue;
       }
-      const cat = runSsh(cfg.ssh, `cat ${remoteXml}`);
+      const cat = await runSsh(cfg.ssh, `cat ${remoteXml}`);
       if (!cat.error && cat.proc && !cat.proc.error && cat.proc.status === 0 && (cat.proc.stdout || "").includes("<testsuite")) {
         xmlText = cat.proc.stdout;
       }
-      runSsh(cfg.ssh, `rm -f ${remoteXml}`);
+      await runSsh(cfg.ssh, `rm -f ${remoteXml}`);
     } else {
       const xmlPath = (0, import_node_path6.join)(logDir, `${app}.xml`);
       const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
       if (cfg.coverage) args.push("--coverage");
-      const proc = (0, import_node_child_process2.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      const proc = await spawnAsync("bench", args, { cwd: benchPath });
       logBuf += `
 $ bench ${args.join(" ")}
 ${proc.stdout || ""}${proc.stderr || ""}`;
@@ -10083,7 +10128,6 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/flutter.mjs
-var import_node_child_process3 = require("node:child_process");
 var import_node_fs7 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path7 = require("node:path");
@@ -10113,11 +10157,11 @@ function parseFlutterJson(output) {
   }
   return { passed, failed, skipped };
 }
-function runFlutter(cfg) {
+async function runFlutter(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const args = cfg.coverage ? ["test", "--reporter", "json", "--coverage"] : ["test", "--reporter", "json"];
-  const proc = (0, import_node_child_process3.spawnSync)("flutter", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const proc = await spawnAsync("flutter", args, { cwd });
   const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
   const logPath = (0, import_node_path7.join)(logDir, "flutter.log");
   let logBuf = `$ flutter ${args.join(" ")} (cwd: ${cwd})
@@ -10155,7 +10199,6 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/electron.mjs
-var import_node_child_process4 = require("node:child_process");
 var import_node_fs8 = require("node:fs");
 var import_node_os3 = require("node:os");
 var import_node_path8 = require("node:path");
@@ -10177,11 +10220,11 @@ function buildElectronArgv(cfg) {
   if (typeof cfg.command === "string" && cfg.command.trim()) return cfg.command.trim().split(/\s+/);
   return cfg.coverage ? ["npx", "jest", "--json", "--coverage", "--coverageReporters=json-summary"] : ["npx", "jest", "--json"];
 }
-function runElectron(cfg) {
+async function runElectron(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const [command, ...args] = buildElectronArgv(cfg);
-  const proc = (0, import_node_child_process4.spawnSync)(command, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const proc = await spawnAsync(command, args, { cwd });
   const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
   const logPath = (0, import_node_path8.join)(logDir, "electron.log");
   let logBuf = `$ ${command} ${args.join(" ")} (cwd: ${cwd})
@@ -10287,7 +10330,6 @@ async function runNextjs(cfg) {
 }
 
 // lib/runners/supabase.mjs
-var import_node_child_process5 = require("node:child_process");
 var import_node_fs10 = require("node:fs");
 var import_node_os5 = require("node:os");
 var import_node_path10 = require("node:path");
@@ -10306,10 +10348,10 @@ function parseTap(tap) {
   }
   return { passed, failed, skipped };
 }
-function runSupabase(cfg) {
+async function runSupabase(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
-  const proc = (0, import_node_child_process5.spawnSync)("supabase", ["test", "db"], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const proc = await spawnAsync("supabase", ["test", "db"], { cwd });
   const logDir = (0, import_node_fs10.mkdtempSync)((0, import_node_path10.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
   const logPath = (0, import_node_path10.join)(logDir, "supabase.log");
   const logBuf = `$ supabase test db (cwd: ${cwd})
@@ -10374,7 +10416,7 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4) {
   const config = loadConfig(projectDir);
   const targets = discoverTargets(projectDir, config, only);
   if (targets.length === 0) {
@@ -10386,15 +10428,16 @@ async function cmdRun(projectDir, only, coverage = false) {
       console.log(`  ${t.notice ? "\u26A0" : "\u2022"} ${name}${t.notice ? " \u2014 " + t.note : ""}`);
     }
   }
-  const results = [];
-  for (const t of targets) {
-    if (!t.notice) {
-      const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
-      console.log(`
-\u25B6 Running ${name}...`);
+  const runnable = targets.filter((t) => !t.notice).length;
+  if (runnable > 0) console.log(`
+\u25B6 Running ${runnable} app(s) (concurrency ${concurrency})...`);
+  const results = await mapPool(targets, concurrency, async (t) => {
+    try {
+      return await runTarget(t, coverage);
+    } catch (e) {
+      return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
     }
-    results.push(await runTarget(t, coverage));
-  }
+  });
   console.log("\n" + formatReport(results));
   const code = computeExitCode(results);
   console.log(`
@@ -10435,9 +10478,11 @@ async function main() {
       console.error(`Unknown stack "${positionals[0]}". Valid: ${STACKS.join(", ")}`);
       return process.exit(2);
     }
-    return process.exit(await cmdRun(projectDir, only, coverage));
+    const concEntry = rest.find((a) => a.startsWith("--concurrency="));
+    const concurrency = Math.max(1, Math.floor(Number((concEntry || "").split("=")[1])) || 4);
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--concurrency=N]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
