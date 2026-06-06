@@ -6,6 +6,7 @@ import { discoverTargets } from '../lib/discover.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
+import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
@@ -104,10 +105,17 @@ function cmdReport(projectDir) {
   return 0;
 }
 
+function cmdDoctor() {
+  const report = runDoctor();
+  console.log(formatDoctor(report));
+  return report.node.ok ? 0 : 1;
+}
+
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
   if (cmd === 'init') return process.exit(cmdInit(projectDir));
+  if (cmd === 'doctor') return process.exit(cmdDoctor());
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'run') {
     const rest = process.argv.slice(3);
@@ -120,7 +128,7 @@ async function main() {
     }
     return process.exit(await cmdRun(projectDir, only, coverage));
   }
-  console.log('Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
