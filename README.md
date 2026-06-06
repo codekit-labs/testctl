@@ -98,6 +98,18 @@ testctl report
 It shows total runs, per-app pass-rate, flaky apps (ones that flip pass↔fail), and the last run.
 History stays local and is never committed or uploaded.
 
+## Coverage
+
+Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):
+
+```
+testctl run --coverage
+testctl run --coverage flutter
+```
+
+Coverage is opt-in — normal runs stay fast and write no coverage artifacts. It's reported and
+recorded, but never affects the pass/fail exit code.
+
 ## Use without Claude Code
 
 The same engine runs as a plain Node CLI (Node >= 20):

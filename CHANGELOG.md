@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-06-06
+
+### Added
+- Opt-in coverage: `testctl run --coverage` collects line-coverage % for Flutter (lcov),
+  Electron (jest json-summary), and Frappe (Cobertura xml), shown in the report and recorded in
+  history. Next.js/Supabase show `—`. Coverage never affects the pass/fail exit code.
+
 ## [1.6.0] - 2026-06-06
 
 ### Changed

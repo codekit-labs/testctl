@@ -8991,7 +8991,7 @@ var require_XMLParser = __commonJS({
     var OrderedObjParser = require_OrderedObjParser();
     var { prettify } = require_node2json();
     var validator = require_validator();
-    var XMLParser2 = class {
+    var XMLParser3 = class {
       constructor(options) {
         this.externalEntities = {};
         this.options = buildOptions(options);
@@ -9038,7 +9038,7 @@ var require_XMLParser = __commonJS({
         }
       }
     };
-    module2.exports = XMLParser2;
+    module2.exports = XMLParser3;
   }
 });
 
@@ -9426,10 +9426,10 @@ var require_fxp = __commonJS({
   "node_modules/fast-xml-parser/src/fxp.js"(exports2, module2) {
     "use strict";
     var validator = require_validator();
-    var XMLParser2 = require_XMLParser();
+    var XMLParser3 = require_XMLParser();
     var XMLBuilder = require_json2xml();
     module2.exports = {
-      XMLParser: XMLParser2,
+      XMLParser: XMLParser3,
       XMLValidator: validator,
       XMLBuilder
     };
@@ -9616,7 +9616,8 @@ function historyEntry(results, timestamp) {
     failed: r.failed,
     skipped: r.skipped,
     ok: r.ok,
-    errored: r.errored
+    errored: r.errored,
+    coverage: r.coverage ?? null
   }));
   const totals = apps.reduce(
     (t, a) => ({
@@ -9811,10 +9812,11 @@ function makeResult({
   errored = false,
   error = null,
   label = null,
-  note = null
+  note = null,
+  coverage = null
 }) {
   const ok = !errored && failed === 0;
-  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, ok };
+  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok };
 }
 
 // lib/report.mjs
@@ -9849,7 +9851,8 @@ function formatReport(results) {
       `passed ${String(r.passed).padStart(4)}`,
       `failed ${String(r.failed).padStart(4)}`,
       `skipped ${String(r.skipped).padStart(4)}`,
-      fmtTime(r.durationMs).padStart(8)
+      fmtTime(r.durationMs).padStart(8),
+      `cov ${r.coverage != null ? r.coverage + "%" : "\u2014"}`
     ].join("  "));
   }
   for (const r of absent) {
@@ -9863,9 +9866,45 @@ var import_node_child_process = require("node:child_process");
 var import_node_fs6 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path6 = require("node:path");
+var import_fast_xml_parser2 = __toESM(require_fxp(), 1);
+
+// lib/coverage.mjs
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
+function parseLcov(text) {
+  let lf = 0, lh = 0;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("LF:")) lf += Number(line.slice(3)) || 0;
+    else if (line.startsWith("LH:")) lh += Number(line.slice(3)) || 0;
+  }
+  if (lf <= 0) return null;
+  return Math.round(lh / lf * 100);
+}
+function parseJestCoverageSummary(jsonText) {
+  let data;
+  try {
+    data = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  const pct = data && data.total && data.total.lines ? data.total.lines.pct : void 0;
+  return typeof pct === "number" ? Math.round(pct) : null;
+}
+function parseCoverageXml(xml) {
+  try {
+    const parser = new import_fast_xml_parser.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+    const doc = parser.parse(xml);
+    const rate = doc && doc.coverage ? doc.coverage["@_line-rate"] : void 0;
+    if (rate === void 0 || rate === null || rate === "") return null;
+    const n = Number(rate);
+    return Number.isNaN(n) ? null : Math.round(n * 100);
+  } catch {
+    return null;
+  }
+}
+
+// lib/runners/frappe.mjs
 function parseFrappeJUnit(xml) {
-  const parser = new import_fast_xml_parser.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+  const parser = new import_fast_xml_parser2.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
   const doc = parser.parse(xml);
   let suites = [];
   if (doc.testsuites && doc.testsuites.testsuite) {
@@ -9898,6 +9937,7 @@ function runFrappe(cfg) {
   for (const app of apps) {
     const xmlPath = (0, import_node_path6.join)(logDir, `${app}.xml`);
     const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
+    if (cfg.coverage) args.push("--coverage");
     const proc = (0, import_node_child_process.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     logBuf += `
 $ bench ${args.join(" ")}
@@ -9928,13 +9968,27 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       error: appErrors.join("; ")
     });
   }
+  let coverage = null;
+  if (cfg.coverage) {
+    for (const p of [(0, import_node_path6.join)(benchPath, "sites", "coverage.xml"), (0, import_node_path6.join)(benchPath, "coverage.xml")]) {
+      try {
+        if ((0, import_node_fs6.existsSync)(p)) {
+          coverage = parseCoverageXml((0, import_node_fs6.readFileSync)(p, "utf8"));
+          break;
+        }
+      } catch {
+        coverage = null;
+      }
+    }
+  }
   return makeResult({
     stack: "frappe",
     passed: totals.passed,
     failed: totals.failed,
     skipped: totals.skipped,
     durationMs: Date.now() - start,
-    rawLogPath: logPath
+    rawLogPath: logPath,
+    coverage
   });
 }
 
@@ -9972,7 +10026,7 @@ function parseFlutterJson(output) {
 function runFlutter(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
-  const args = ["test", "--reporter", "json"];
+  const args = cfg.coverage ? ["test", "--reporter", "json", "--coverage"] : ["test", "--reporter", "json"];
   const proc = (0, import_node_child_process2.spawnSync)("flutter", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
   const logPath = (0, import_node_path7.join)(logDir, "flutter.log");
@@ -9990,13 +10044,23 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   if (ranButProducedNothing(proc.status, counts)) {
     return makeResult({ stack: "flutter", errored: true, error: `flutter exited ${proc.status} with no test results`, rawLogPath: logPath });
   }
+  let coverage = null;
+  if (cfg.coverage) {
+    try {
+      const lcovPath = (0, import_node_path7.join)(cwd, "coverage", "lcov.info");
+      if ((0, import_node_fs7.existsSync)(lcovPath)) coverage = parseLcov((0, import_node_fs7.readFileSync)(lcovPath, "utf8"));
+    } catch {
+      coverage = null;
+    }
+  }
   return makeResult({
     stack: "flutter",
     passed: counts.passed,
     failed: counts.failed,
     skipped: counts.skipped,
     durationMs: Date.now() - start,
-    rawLogPath: logPath
+    rawLogPath: logPath,
+    coverage
   });
 }
 
@@ -10021,7 +10085,7 @@ function parseJestJson(output) {
 function buildElectronArgv(cfg) {
   if (Array.isArray(cfg.command) && cfg.command.length) return cfg.command;
   if (typeof cfg.command === "string" && cfg.command.trim()) return cfg.command.trim().split(/\s+/);
-  return ["npx", "jest", "--json"];
+  return cfg.coverage ? ["npx", "jest", "--json", "--coverage", "--coverageReporters=json-summary"] : ["npx", "jest", "--json"];
 }
 function runElectron(cfg) {
   const start = Date.now();
@@ -10049,13 +10113,23 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   if (ranButProducedNothing(proc.status, counts)) {
     return makeResult({ stack: "electron", errored: true, error: `jest exited ${proc.status} with no test results`, rawLogPath: logPath });
   }
+  let coverage = null;
+  if (cfg.coverage && !cfg.command) {
+    try {
+      const sumPath = (0, import_node_path8.join)(cwd, "coverage", "coverage-summary.json");
+      if ((0, import_node_fs8.existsSync)(sumPath)) coverage = parseJestCoverageSummary((0, import_node_fs8.readFileSync)(sumPath, "utf8"));
+    } catch {
+      coverage = null;
+    }
+  }
   return makeResult({
     stack: "electron",
     passed: counts.passed,
     failed: counts.failed,
     skipped: counts.skipped,
     durationMs: Date.now() - start,
-    rawLogPath: logPath
+    rawLogPath: logPath,
+    coverage
   });
 }
 
@@ -10188,17 +10262,17 @@ function cmdInit(projectDir) {
   console.log("  Fill any <FILL-ME> values, then run: testctl run");
   return 0;
 }
-async function runTarget(target) {
+async function runTarget(target, coverage = false) {
   if (target.notice) {
     return makeResult({ stack: target.stack, present: true, label: target.label, note: target.note });
   }
   let result;
   if (target.stack === "frappe") {
-    result = runFrappe(target.config || {});
+    result = runFrappe({ ...target.config || {}, coverage });
   } else if (target.stack === "flutter") {
-    result = runFlutter({ path: target.path });
+    result = runFlutter({ path: target.path, coverage });
   } else if (target.stack === "electron") {
-    result = runElectron({ path: target.path });
+    result = runElectron({ path: target.path, coverage });
   } else if (target.stack === "nextjs") {
     result = runNextjs(target.config || {});
   } else if (target.stack === "supabase") {
@@ -10210,7 +10284,7 @@ async function runTarget(target) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only) {
+async function cmdRun(projectDir, only, coverage = false) {
   const config = loadConfig(projectDir);
   const targets = discoverTargets(projectDir, config, only);
   if (targets.length === 0) {
@@ -10229,7 +10303,7 @@ async function cmdRun(projectDir, only) {
       console.log(`
 \u25B6 Running ${name}...`);
     }
-    results.push(await runTarget(t));
+    results.push(await runTarget(t, coverage));
   }
   console.log("\n" + formatReport(results));
   const code = computeExitCode(results);
@@ -10257,14 +10331,17 @@ async function main() {
   if (cmd === "init") return process.exit(cmdInit(projectDir));
   if (cmd === "report") return process.exit(cmdReport(projectDir));
   if (cmd === "run") {
-    const only = arg && STACKS.includes(arg) ? arg : null;
-    if (arg && !only) {
-      console.error(`Unknown stack "${arg}". Valid: ${STACKS.join(", ")}`);
+    const rest = process.argv.slice(3);
+    const coverage = rest.includes("--coverage");
+    const positionals = rest.filter((a) => !a.startsWith("--"));
+    const only = positionals[0] && STACKS.includes(positionals[0]) ? positionals[0] : null;
+    if (positionals[0] && !only) {
+      console.error(`Unknown stack "${positionals[0]}". Valid: ${STACKS.join(", ")}`);
       return process.exit(2);
     }
-    return process.exit(await cmdRun(projectDir, only));
+    return process.exit(await cmdRun(projectDir, only, coverage));
   }
-  console.log("Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
