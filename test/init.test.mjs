@@ -47,3 +47,10 @@ test('buildInitYaml always produces valid YAML', () => {
   assert.deepEqual(parsed.stacks.frappe.apps, ['a']);
   assert.equal(parsed.stacks.nextjs.vercelUrl, '<FILL-ME>');
 });
+
+test('buildInitYaml caps the sites hint at 6 with a "more" suffix', () => {
+  const sites = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'];
+  const y = buildInitYaml({ auto: { flutter: 0, electron: 0, supabase: 0 }, frappe: { benchPath: '/b', apps: ['a'], sites }, nextjs: 0 });
+  assert.match(y, /s1, s2, s3, s4, s5, s6, …\(2 more\)/);
+  assert.doesNotMatch(y, /s7/);
+});

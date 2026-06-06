@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-06-06
+
+### Changed
+- `testctl report` now shows a per-app coverage column (last recorded %).
+- Smart `init` caps the Frappe sites hint at 6 names + "(…N more)" so it stays readable on
+  benches with many sites.
+- README: added a "Requirements" section (Node ≥ 20 + per-stack tools) for installing on other
+  machines.
+
 ## [1.7.0] - 2026-06-06
 
 ### Added

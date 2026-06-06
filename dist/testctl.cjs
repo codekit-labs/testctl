@@ -9644,10 +9644,11 @@ function summarize(text) {
   for (const e of entries) {
     for (const a of e.apps || []) {
       const key = `${a.stack} (${a.label})`;
-      const s = acc[key] || { runs: 0, okRuns: 0, lastOk: null };
+      const s = acc[key] || { runs: 0, okRuns: 0, lastOk: null, lastCoverage: null };
       s.runs += 1;
       if (a.ok) s.okRuns += 1;
       s.lastOk = a.ok;
+      if (a.coverage != null) s.lastCoverage = a.coverage;
       acc[key] = s;
     }
   }
@@ -9657,7 +9658,8 @@ function summarize(text) {
       runs: s.runs,
       lastOk: s.lastOk,
       passRate: s.runs ? Math.round(s.okRuns / s.runs * 100) : 0,
-      flaky: s.okRuns > 0 && s.okRuns < s.runs
+      flaky: s.okRuns > 0 && s.okRuns < s.runs,
+      lastCoverage: s.lastCoverage
     };
   }
   return {
@@ -9672,10 +9674,11 @@ function formatHistoryReport(summary) {
   const lines = [
     `testctl run history \u2014 ${summary.totalRuns} run${summary.totalRuns === 1 ? "" : "s"} (last: ${last})`,
     "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
-    `  ${"App".padEnd(34)} ${"Runs".padStart(4)}  ${"Pass%".padStart(5)}  Flaky`
+    `  ${"App".padEnd(34)} ${"Runs".padStart(4)}  ${"Pass%".padStart(5)}  ${"Cov".padStart(4)}  Flaky`
   ];
   for (const [key, s] of Object.entries(summary.perApp)) {
-    lines.push(`  ${key.padEnd(34)} ${String(s.runs).padStart(4)}  ${String(s.passRate).padStart(4)}%  ${s.flaky ? "yes" : "no"}`);
+    const cov = s.lastCoverage != null ? `${s.lastCoverage}%` : "\u2014";
+    lines.push(`  ${key.padEnd(34)} ${String(s.runs).padStart(4)}  ${String(s.passRate).padStart(4)}%  ${cov.padStart(4)}  ${s.flaky ? "yes" : "no"}`);
   }
   return lines.join("\n");
 }
@@ -9715,7 +9718,7 @@ function buildInitYaml(detection) {
   const blocks = [];
   if (detection.frappe) {
     const f = detection.frappe;
-    const sitesHint = f.sites && f.sites.length ? f.sites.join(", ") : "(none found \u2014 set your test site)";
+    const sitesHint = f.sites && f.sites.length ? f.sites.length > 6 ? `${f.sites.slice(0, 6).join(", ")}, \u2026(${f.sites.length - 6} more)` : f.sites.join(", ") : "(none found \u2014 set your test site)";
     blocks.push(
       [
         "  frappe:",

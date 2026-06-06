@@ -29,6 +29,18 @@ You can also just ask in plain language — e.g. *"run all the tests for this pr
 and the bundled skill handles it. The engine is bundled and dependency-free — nothing to
 `npm install`.
 
+## Requirements
+
+The plugin works on any machine — it installs from GitHub and the engine is a self-contained
+bundle. You only need, per machine:
+
+- **Node.js ≥ 20** (runs the engine).
+- The test toolchain for the stacks you actually test there — `flutter`, `npx jest`/`vitest`,
+  `bench` (Frappe), `supabase`. A missing tool only affects that stack (it reports a clear
+  error); the others still run.
+- For **Frappe / Next.js**, a per-project `testctl.yaml` (paths/URLs differ per machine) —
+  run `testctl init` and it auto-generates one.
+
 ## Updating
 
 When a new version is released, refresh the marketplace and update the plugin:

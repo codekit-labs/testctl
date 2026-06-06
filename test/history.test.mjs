@@ -60,3 +60,15 @@ test('historyEntry records coverage per app', () => {
   const e = historyEntry(results, 't');
   assert.equal(e.apps[0].coverage, 80);
 });
+
+test('summarize keeps last coverage and formatHistoryReport shows a Cov column', () => {
+  const lines = [
+    JSON.stringify({ ts: 't1', apps: [{ stack: 'flutter', label: 'a', ok: true, passed: 1, failed: 0, skipped: 0, coverage: 50 }] }),
+    JSON.stringify({ ts: 't2', apps: [{ stack: 'flutter', label: 'a', ok: true, passed: 1, failed: 0, skipped: 0, coverage: 72 }] }),
+  ].join('\n');
+  const s = summarize(lines);
+  assert.equal(s.perApp['flutter (a)'].lastCoverage, 72);
+  const out = formatHistoryReport(s);
+  assert.match(out, /Cov/);
+  assert.match(out, /72%/);
+});
