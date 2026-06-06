@@ -10,6 +10,7 @@ import { buildInitYaml, scanProject } from '../lib/init.mjs';
 import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
+import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
 import { runElectron } from '../lib/runners/electron.mjs';
@@ -59,8 +60,11 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null) {
   const config = loadConfig(projectDir);
+  if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
+  if (Number.isNaN(minCoverage)) minCoverage = null;
+  if (minCoverage != null) coverage = true;
   const targets = discoverTargets(projectDir, config, only);
 
   if (targets.length === 0) {
@@ -83,6 +87,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4) {
     }
   });
 
+  applyCoverageGate(results, minCoverage);
   console.log('\n' + formatReport(results));
   const code = computeExitCode(results);
   console.log(`\nExit code: ${code}`);
@@ -130,9 +135,12 @@ async function main() {
     }
     const concEntry = rest.find((a) => a.startsWith('--concurrency='));
     const concurrency = Math.max(1, Math.floor(Number((concEntry || '').split('=')[1])) || 4);
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency));
+    const mcEntry = rest.find((a) => a.startsWith('--min-coverage='));
+    const mc = mcEntry ? Number(mcEntry.split('=')[1]) : null;
+    const minCoverage = mc != null && !Number.isNaN(mc) ? mc : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--concurrency=N]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
