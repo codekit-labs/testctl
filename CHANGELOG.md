@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-06-06
+
+### Added
+- Monorepo discovery: testctl now walks subdirectories and runs every Flutter, Electron, and
+  Supabase app it finds, each reported by its relative path. Discovery prunes inside matched
+  apps and skips `node_modules`, `.git`, build output, etc.
+
+### Changed
+- Next.js (needs `vercelUrl`) and Frappe (needs bench/site/apps) detected on disk but not
+  configured now show a non-failing "needs config" notice instead of erroring the whole run.
+- Result objects carry `label` (the app's relative path) and `note`.
+
 ## [1.0.1] - 2026-06-06
 
 ### Changed
