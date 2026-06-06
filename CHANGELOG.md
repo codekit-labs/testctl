@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-06-06
+
+### Added
+- Run history: every `testctl run` appends a record to `.testctl/history.jsonl` (best-effort;
+  the folder self-ignores). New `testctl report` command summarizes total runs, per-app
+  pass-rate, flaky apps, and the last run. History stays local.
+- GitHub issue templates (bug / feature / tuning-feedback), a PR template, and a CONTRIBUTING
+  "Fine-tuning" guide.
+
 ## [1.4.0] - 2026-06-06
 
 ### Added

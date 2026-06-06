@@ -9437,8 +9437,8 @@ var require_fxp = __commonJS({
 });
 
 // bin/testctl.mjs
-var import_node_fs9 = require("node:fs");
-var import_node_path9 = require("node:path");
+var import_node_fs10 = require("node:fs");
+var import_node_path10 = require("node:path");
 
 // lib/config.mjs
 var import_node_fs = require("node:fs");
@@ -9605,6 +9605,90 @@ function discoverTargets(root, config = {}, onlyStack = null) {
   return onlyStack ? targets.filter((t) => t.stack === onlyStack) : targets;
 }
 
+// lib/history.mjs
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
+function historyEntry(results, timestamp) {
+  const apps = results.filter((r) => r.present).map((r) => ({
+    stack: r.stack,
+    label: r.label || r.stack,
+    passed: r.passed,
+    failed: r.failed,
+    skipped: r.skipped,
+    ok: r.ok,
+    errored: r.errored
+  }));
+  const totals = apps.reduce(
+    (t, a) => ({
+      passed: t.passed + a.passed,
+      failed: t.failed + a.failed,
+      skipped: t.skipped + a.skipped,
+      apps: t.apps + 1
+    }),
+    { passed: 0, failed: 0, skipped: 0, apps: 0 }
+  );
+  return { ts: timestamp, apps, totals };
+}
+function summarize(text) {
+  const entries = [];
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      entries.push(JSON.parse(t));
+    } catch {
+    }
+  }
+  const acc = {};
+  for (const e of entries) {
+    for (const a of e.apps || []) {
+      const key = `${a.stack} (${a.label})`;
+      const s = acc[key] || { runs: 0, okRuns: 0, lastOk: null };
+      s.runs += 1;
+      if (a.ok) s.okRuns += 1;
+      s.lastOk = a.ok;
+      acc[key] = s;
+    }
+  }
+  const perApp = {};
+  for (const [key, s] of Object.entries(acc)) {
+    perApp[key] = {
+      runs: s.runs,
+      lastOk: s.lastOk,
+      passRate: s.runs ? Math.round(s.okRuns / s.runs * 100) : 0,
+      flaky: s.okRuns > 0 && s.okRuns < s.runs
+    };
+  }
+  return {
+    totalRuns: entries.length,
+    lastRun: entries.length ? entries[entries.length - 1] : null,
+    perApp
+  };
+}
+function formatHistoryReport(summary) {
+  if (summary.totalRuns === 0) return "No run history yet \u2014 run `testctl run` first.";
+  const last = summary.lastRun ? summary.lastRun.ts : "n/a";
+  const lines = [
+    `testctl run history \u2014 ${summary.totalRuns} run${summary.totalRuns === 1 ? "" : "s"} (last: ${last})`,
+    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    `  ${"App".padEnd(34)} ${"Runs".padStart(4)}  ${"Pass%".padStart(5)}  Flaky`
+  ];
+  for (const [key, s] of Object.entries(summary.perApp)) {
+    lines.push(`  ${key.padEnd(34)} ${String(s.runs).padStart(4)}  ${String(s.passRate).padStart(4)}%  ${s.flaky ? "yes" : "no"}`);
+  }
+  return lines.join("\n");
+}
+function appendHistory(projectDir, entry) {
+  try {
+    const tdir = (0, import_node_path4.join)(projectDir, ".testctl");
+    if (!(0, import_node_fs4.existsSync)(tdir)) (0, import_node_fs4.mkdirSync)(tdir, { recursive: true });
+    const gi = (0, import_node_path4.join)(tdir, ".gitignore");
+    if (!(0, import_node_fs4.existsSync)(gi)) (0, import_node_fs4.writeFileSync)(gi, "*\n");
+    (0, import_node_fs4.appendFileSync)((0, import_node_path4.join)(tdir, "history.jsonl"), JSON.stringify(entry) + "\n");
+  } catch {
+  }
+}
+
 // lib/result.mjs
 function makeResult({
   stack,
@@ -9666,9 +9750,9 @@ function formatReport(results) {
 
 // lib/runners/frappe.mjs
 var import_node_child_process = require("node:child_process");
-var import_node_fs4 = require("node:fs");
+var import_node_fs5 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
 function parseFrappeJUnit(xml) {
   const parser = new import_fast_xml_parser.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
@@ -9696,13 +9780,13 @@ function runFrappe(cfg) {
   if (!benchPath || !site || !Array.isArray(apps) || apps.length === 0) {
     return makeResult({ stack: "frappe", errored: true, error: "frappe config requires benchPath, site, and apps[]" });
   }
-  const logDir = (0, import_node_fs4.mkdtempSync)((0, import_node_path4.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
-  const logPath = (0, import_node_path4.join)(logDir, "frappe.log");
+  const logDir = (0, import_node_fs5.mkdtempSync)((0, import_node_path5.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
+  const logPath = (0, import_node_path5.join)(logDir, "frappe.log");
   let logBuf = "";
   const totals = { passed: 0, failed: 0, skipped: 0 };
   const appErrors = [];
   for (const app of apps) {
-    const xmlPath = (0, import_node_path4.join)(logDir, `${app}.xml`);
+    const xmlPath = (0, import_node_path5.join)(logDir, `${app}.xml`);
     const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
     const proc = (0, import_node_child_process.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     logBuf += `
@@ -9712,8 +9796,8 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       appErrors.push(`${app}: failed to run bench: ${proc.error.message}`);
       continue;
     }
-    if ((0, import_node_fs4.existsSync)(xmlPath)) {
-      const r = parseFrappeJUnit((0, import_node_fs4.readFileSync)(xmlPath, "utf8"));
+    if ((0, import_node_fs5.existsSync)(xmlPath)) {
+      const r = parseFrappeJUnit((0, import_node_fs5.readFileSync)(xmlPath, "utf8"));
       totals.passed += r.passed;
       totals.failed += r.failed;
       totals.skipped += r.skipped;
@@ -9721,7 +9805,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       appErrors.push(`${app}: no JUnit output (is allow_tests enabled for the site?)`);
     }
   }
-  (0, import_node_fs4.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs5.writeFileSync)(logPath, logBuf);
   if (appErrors.length) {
     return makeResult({
       stack: "frappe",
@@ -9746,9 +9830,9 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 
 // lib/runners/flutter.mjs
 var import_node_child_process2 = require("node:child_process");
-var import_node_fs5 = require("node:fs");
+var import_node_fs6 = require("node:fs");
 var import_node_os2 = require("node:os");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 
 // lib/runners/shared.mjs
 function ranButProducedNothing(status, counts) {
@@ -9780,18 +9864,18 @@ function runFlutter(cfg) {
   const cwd = cfg.path || ".";
   const args = ["test", "--reporter", "json"];
   const proc = (0, import_node_child_process2.spawnSync)("flutter", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  const logDir = (0, import_node_fs5.mkdtempSync)((0, import_node_path5.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
-  const logPath = (0, import_node_path5.join)(logDir, "flutter.log");
+  const logDir = (0, import_node_fs6.mkdtempSync)((0, import_node_path6.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
+  const logPath = (0, import_node_path6.join)(logDir, "flutter.log");
   let logBuf = `$ flutter ${args.join(" ")} (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   if (proc.error && proc.error.code !== "ENOBUFS") {
-    (0, import_node_fs5.writeFileSync)(logPath, logBuf);
+    (0, import_node_fs6.writeFileSync)(logPath, logBuf);
     return makeResult({ stack: "flutter", errored: true, error: `failed to run flutter: ${proc.error.message}`, rawLogPath: logPath });
   }
   if (proc.error && proc.error.code === "ENOBUFS") {
     logBuf += "\n[testctl] output truncated at maxBuffer\n";
   }
-  (0, import_node_fs5.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs6.writeFileSync)(logPath, logBuf);
   const counts = parseFlutterJson(proc.stdout || "");
   if (ranButProducedNothing(proc.status, counts)) {
     return makeResult({ stack: "flutter", errored: true, error: `flutter exited ${proc.status} with no test results`, rawLogPath: logPath });
@@ -9808,9 +9892,9 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 
 // lib/runners/electron.mjs
 var import_node_child_process3 = require("node:child_process");
-var import_node_fs6 = require("node:fs");
+var import_node_fs7 = require("node:fs");
 var import_node_os3 = require("node:os");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 function parseJestJson(output) {
   const firstBrace = output.indexOf("{");
   const lastBrace = output.lastIndexOf("}");
@@ -9834,18 +9918,18 @@ function runElectron(cfg) {
   const cwd = cfg.path || ".";
   const [command, ...args] = buildElectronArgv(cfg);
   const proc = (0, import_node_child_process3.spawnSync)(command, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  const logDir = (0, import_node_fs6.mkdtempSync)((0, import_node_path6.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
-  const logPath = (0, import_node_path6.join)(logDir, "electron.log");
+  const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
+  const logPath = (0, import_node_path7.join)(logDir, "electron.log");
   let logBuf = `$ ${command} ${args.join(" ")} (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   if (proc.error && proc.error.code !== "ENOBUFS") {
-    (0, import_node_fs6.writeFileSync)(logPath, logBuf);
+    (0, import_node_fs7.writeFileSync)(logPath, logBuf);
     return makeResult({ stack: "electron", errored: true, error: `failed to run jest: ${proc.error.message}`, rawLogPath: logPath });
   }
   if (proc.error && proc.error.code === "ENOBUFS") {
     logBuf += "\n[testctl] output truncated at maxBuffer\n";
   }
-  (0, import_node_fs6.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs7.writeFileSync)(logPath, logBuf);
   let counts;
   try {
     counts = parseJestJson(proc.stdout || "");
@@ -9866,9 +9950,9 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/nextjs.mjs
-var import_node_fs7 = require("node:fs");
+var import_node_fs8 = require("node:fs");
 var import_node_os4 = require("node:os");
-var import_node_path7 = require("node:path");
+var import_node_path8 = require("node:path");
 function evaluateCheck(check, response) {
   const path = check.path;
   const expectStatus = check.expectStatus ?? 200;
@@ -9885,10 +9969,10 @@ function evaluateCheck(check, response) {
 }
 async function runNextjs(cfg) {
   const start = Date.now();
-  const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os4.tmpdir)(), "testctl-nextjs-"));
-  const logPath = (0, import_node_path7.join)(logDir, "nextjs.log");
+  const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os4.tmpdir)(), "testctl-nextjs-"));
+  const logPath = (0, import_node_path8.join)(logDir, "nextjs.log");
   if (!cfg.vercelUrl) {
-    (0, import_node_fs7.writeFileSync)(logPath, "No vercelUrl configured.\n");
+    (0, import_node_fs8.writeFileSync)(logPath, "No vercelUrl configured.\n");
     return makeResult({ stack: "nextjs", errored: true, error: "set nextjs.vercelUrl in testctl.yaml", rawLogPath: logPath });
   }
   const checks = Array.isArray(cfg.checks) && cfg.checks.length ? cfg.checks : [{ path: "/", expectStatus: 200 }];
@@ -9917,7 +10001,7 @@ async function runNextjs(cfg) {
     logBuf += `${result.ok ? "PASS" : "FAIL"} ${url} \u2014 ${result.reason}
 `;
   }
-  (0, import_node_fs7.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs8.writeFileSync)(logPath, logBuf);
   return makeResult({
     stack: "nextjs",
     passed,
@@ -9930,9 +10014,9 @@ async function runNextjs(cfg) {
 
 // lib/runners/supabase.mjs
 var import_node_child_process4 = require("node:child_process");
-var import_node_fs8 = require("node:fs");
+var import_node_fs9 = require("node:fs");
 var import_node_os5 = require("node:os");
-var import_node_path8 = require("node:path");
+var import_node_path9 = require("node:path");
 function parseTap(tap) {
   let passed = 0, failed = 0, skipped = 0;
   for (const line of tap.split("\n")) {
@@ -9952,11 +10036,11 @@ function runSupabase(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const proc = (0, import_node_child_process4.spawnSync)("supabase", ["test", "db"], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
-  const logPath = (0, import_node_path8.join)(logDir, "supabase.log");
+  const logDir = (0, import_node_fs9.mkdtempSync)((0, import_node_path9.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
+  const logPath = (0, import_node_path9.join)(logDir, "supabase.log");
   const logBuf = `$ supabase test db (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
-  (0, import_node_fs8.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs9.writeFileSync)(logPath, logBuf);
   if (proc.error) {
     const msg = proc.error.code === "ENOENT" ? "supabase CLI not found \u2014 install it and run 'supabase start'" : `failed to run supabase: ${proc.error.message}`;
     return makeResult({ stack: "supabase", errored: true, error: msg, rawLogPath: logPath });
@@ -9994,12 +10078,12 @@ var TEMPLATE = `stacks:
   #   path: ./
 `;
 function cmdInit(projectDir) {
-  const path = (0, import_node_path9.join)(projectDir, "testctl.yaml");
-  if ((0, import_node_fs9.existsSync)(path)) {
+  const path = (0, import_node_path10.join)(projectDir, "testctl.yaml");
+  if ((0, import_node_fs10.existsSync)(path)) {
     console.log("testctl.yaml already exists \u2014 leaving it untouched.");
     return 0;
   }
-  (0, import_node_fs9.writeFileSync)(path, TEMPLATE);
+  (0, import_node_fs10.writeFileSync)(path, TEMPLATE);
   console.log(`Created ${path}. Edit it to point at your stacks.`);
   return 0;
 }
@@ -10052,12 +10136,25 @@ async function cmdRun(projectDir, only) {
 Exit code: ${code}`);
   const failedLogs = results.filter((r) => r.present && !r.ok).map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
   console.log("TESTCTL_JSON " + JSON.stringify({ results, failedLogs }));
+  appendHistory(projectDir, historyEntry(results, (/* @__PURE__ */ new Date()).toISOString()));
   return code;
+}
+function cmdReport(projectDir) {
+  const path = (0, import_node_path10.join)(projectDir, ".testctl", "history.jsonl");
+  let text = "";
+  try {
+    text = (0, import_node_fs10.readFileSync)(path, "utf8");
+  } catch {
+    text = "";
+  }
+  console.log(formatHistoryReport(summarize(text)));
+  return 0;
 }
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
   if (cmd === "init") return process.exit(cmdInit(projectDir));
+  if (cmd === "report") return process.exit(cmdReport(projectDir));
   if (cmd === "run") {
     const only = arg && STACKS.includes(arg) ? arg : null;
     if (arg && !only) {
@@ -10066,7 +10163,7 @@ async function main() {
     }
     return process.exit(await cmdRun(projectDir, only));
   }
-  console.log("Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase]");
+  console.log("Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();

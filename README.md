@@ -86,6 +86,18 @@ leaving all changes uncommitted for you to review and commit.
 A quiet SessionStart hook also makes Claude aware of these commands so it can offer the right
 one when you're working on tests; it never runs anything automatically.
 
+## Run history
+
+Every `run` is recorded to `.testctl/history.jsonl` in the project (the folder self-ignores via
+its own `.gitignore`). See trends any time:
+
+```
+testctl report
+```
+
+It shows total runs, per-app pass-rate, flaky apps (ones that flip pass↔fail), and the last run.
+History stays local and is never committed or uploaded.
+
 ## Use without Claude Code
 
 The same engine runs as a plain Node CLI (Node >= 20):
