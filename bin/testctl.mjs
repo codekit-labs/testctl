@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
+import { homedir } from 'node:os';
+import { buildInitYaml, scanProject } from '../lib/init.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
@@ -14,31 +16,21 @@ import { runSupabase } from '../lib/runners/supabase.mjs';
 
 const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase'];
 
-const TEMPLATE = `stacks:
-  # frappe:
-  #   benchPath: /path/to/frappe-bench
-  #   site: test
-  #   apps: [your_app]
-  # flutter:
-  #   path: ./mobile
-  # electron:
-  #   path: ./desktop
-  # nextjs:
-  #   vercelUrl: https://your-app.vercel.app
-  #   checks:
-  #     - { path: /, expectStatus: 200 }
-  # supabase:
-  #   path: ./
-`;
-
 function cmdInit(projectDir) {
   const path = join(projectDir, 'testctl.yaml');
   if (existsSync(path)) {
     console.log('testctl.yaml already exists — leaving it untouched.');
     return 0;
   }
-  writeFileSync(path, TEMPLATE);
-  console.log(`Created ${path}. Edit it to point at your stacks.`);
+  const detection = scanProject(projectDir, homedir());
+  writeFileSync(path, buildInitYaml(detection));
+  const a = detection.auto;
+  console.log(`Created ${path}`);
+  console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
+  if (detection.frappe) {
+    console.log(`  frappe app: ${detection.frappe.apps.join(', ')} (bench: ${detection.frappe.benchPath || 'not found — set benchPath'})`);
+  }
+  console.log('  Fill any <FILL-ME> values, then run: testctl run');
   return 0;
 }
 
