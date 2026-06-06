@@ -54,3 +54,21 @@ test('formatReport renders Next.js and Supabase labels', () => {
   assert.match(out, /Supabase/);
   assert.match(out, /14/);
 });
+
+test('formatReport shows a sub-app label in parentheses', () => {
+  const results = [makeResult({ stack: 'flutter', label: 'apps/pos', passed: 12, failed: 0, durationMs: 1000 })];
+  const out = formatReport(results);
+  assert.match(out, /Flutter \(apps\/pos\)/);
+  assert.match(out, /12/);
+});
+
+test('formatReport renders a needs-config notice and it does not fail the exit code', () => {
+  const results = [
+    makeResult({ stack: 'frappe', present: true, note: 'needs benchPath, site, apps in testctl.yaml' }),
+    makeResult({ stack: 'flutter', label: 'apps/pos', passed: 3, failed: 0 }),
+  ];
+  const out = formatReport(results);
+  assert.match(out, /⚠/);
+  assert.match(out, /needs benchPath/);
+  assert.equal(computeExitCode(results), 0);
+});
