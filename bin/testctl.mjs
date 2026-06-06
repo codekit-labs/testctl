@@ -2,7 +2,7 @@
 import { writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
-import { detectStacks } from '../lib/detect.mjs';
+import { discoverTargets } from '../lib/discover.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
@@ -41,59 +41,59 @@ function cmdInit(projectDir) {
   return 0;
 }
 
-async function runStack(stack, detected, config) {
-  if (stack === 'frappe') {
-    const cfg = config.stacks.frappe || detected.frappe.config || {};
-    return runFrappe(cfg);
+async function runTarget(target) {
+  if (target.notice) {
+    return makeResult({ stack: target.stack, present: true, label: target.label, note: target.note });
   }
-  if (stack === 'flutter') {
-    return runFlutter(config.stacks.flutter || { path: detected.flutter.path });
+  let result;
+  if (target.stack === 'frappe') {
+    result = runFrappe(target.config || {});
+  } else if (target.stack === 'flutter') {
+    result = runFlutter({ path: target.path });
+  } else if (target.stack === 'electron') {
+    result = runElectron({ path: target.path });
+  } else if (target.stack === 'nextjs') {
+    result = runNextjs(target.config || {});
+  } else if (target.stack === 'supabase') {
+    result = runSupabase({ path: target.path });
+  } else {
+    result = makeResult({ stack: target.stack, errored: true, error: `unknown stack ${target.stack}` });
   }
-  if (stack === 'electron') {
-    return runElectron(config.stacks.electron || { path: detected.electron.path });
-  }
-  if (stack === 'nextjs') {
-    return runNextjs(config.stacks.nextjs || detected.nextjs.config || {});
-  }
-  if (stack === 'supabase') {
-    return runSupabase(config.stacks.supabase || detected.supabase.config || { path: detected.supabase.path });
-  }
-  return makeResult({ stack, errored: true, error: `unknown stack ${stack}` });
+  result = await result;
+  result.label = target.label || result.stack;
+  return result;
 }
 
 async function cmdRun(projectDir, only) {
   const config = loadConfig(projectDir);
-  const detected = detectStacks(projectDir, config);
+  const targets = discoverTargets(projectDir, config, only);
 
-  const targets = only ? [only] : STACKS;
-  console.log('Detecting stacks...');
-  for (const s of STACKS) {
-    console.log(`  ${detected[s].present ? '✓' : '⊘'} ${s}${detected[s].present ? '' : ' (not present)'}`);
+  if (targets.length === 0) {
+    console.log('No testable apps found.');
+  } else {
+    console.log('Discovered apps:');
+    for (const t of targets) {
+      const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
+      console.log(`  ${t.notice ? '⚠' : '•'} ${name}${t.notice ? ' — ' + t.note : ''}`);
+    }
   }
 
   const results = [];
-  for (const stack of targets) {
-    if (!detected[stack].present) {
-      results.push(makeResult({ stack, present: false }));
-      continue;
+  for (const t of targets) {
+    if (!t.notice) {
+      const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
+      console.log(`\n▶ Running ${name}...`);
     }
-    console.log(`\n▶ Running ${stack}...`);
-    results.push(await runStack(stack, detected, config));
-  }
-
-  // Ensure every stack appears in the report when running all.
-  if (!only) {
-    for (const s of STACKS) {
-      if (!results.find((r) => r.stack === s)) results.push(makeResult({ stack: s, present: false }));
-    }
+    results.push(await runTarget(t));
   }
 
   console.log('\n' + formatReport(results));
   const code = computeExitCode(results);
   console.log(`\nExit code: ${code}`);
 
-  // Emit machine-readable JSON for the skill on the last line, prefixed for easy extraction.
-  const failedLogs = results.filter((r) => r.present && !r.ok).map((r) => ({ stack: r.stack, rawLogPath: r.rawLogPath, error: r.error }));
+  const failedLogs = results
+    .filter((r) => r.present && !r.ok)
+    .map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
   console.log('TESTCTL_JSON ' + JSON.stringify({ results, failedLogs }));
   return code;
 }
