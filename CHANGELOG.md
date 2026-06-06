@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.13.0] - 2026-06-06
+
+### Added
+- Multi-site Frappe: `stacks.frappe` may now be a **list** of `{ benchPath, site, apps, ssh? }`
+  site-targets. Different sites run **in parallel** (separate databases — safe, including remote
+  over SSH), while apps within a site stay serial. Each site is reported on its own row
+  (`Frappe (site_a)`). A single `frappe:` object behaves exactly as before.
+
 ## [1.12.1] - 2026-06-06
 
 ### Removed

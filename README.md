@@ -213,6 +213,22 @@ stacks:
     path: ./
 ```
 
+### Multiple Frappe sites
+
+To test several sites/benches, make `frappe` a list — each entry is its own
+`{ benchPath, site, apps }` (with an optional `ssh` block). Different sites run in parallel
+(separate databases), and each gets its own report row:
+
+```yaml
+stacks:
+  frappe:
+    - { benchPath: /path/to/bench, site: site_a, apps: [app_a] }
+    - { benchPath: /path/to/bench, site: site_b, apps: [app_b] }
+```
+
+A single `frappe:` object (shown above) still works unchanged. Apps within one site run serially
+(they share that site's database); only different sites run concurrently.
+
 ### Remote Frappe over SSH
 
 Test a Frappe app on a remote bench by adding an `ssh` block (key or password). `benchPath` is
