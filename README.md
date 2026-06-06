@@ -41,6 +41,9 @@ bundle. You only need, per machine:
 - For **Frappe / Next.js**, a per-project `testctl.yaml` (paths/URLs differ per machine) —
   run `testctl init` and it auto-generates one.
 
+Run `testctl doctor` (or `/testctl:doctor`) any time to check this machine: it reports the Node
+version and which stack tools are installed, and lists the stacks it can test here.
+
 ## Updating
 
 When a new version is released, refresh the marketplace and update the plugin:

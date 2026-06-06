@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] - 2026-06-06
+
+### Added
+- `testctl doctor` (and `/testctl:doctor`): a read-only health check reporting the Node version
+  (>= 20) and which stack tools (flutter, bench, supabase) are installed, plus the "ready
+  stacks" for this machine. Exit 1 only if Node < 20.
+
 ## [1.7.1] - 2026-06-06
 
 ### Changed

@@ -9803,6 +9803,48 @@ function scanProject(cwd, homeDir) {
   return { auto, frappe, nextjs };
 }
 
+// lib/doctor.mjs
+var import_node_child_process = require("node:child_process");
+function parseMajor(versionString) {
+  if (!versionString) return null;
+  const m = String(versionString).match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+function checkTool(name) {
+  try {
+    const proc = (0, import_node_child_process.spawnSync)(name, ["--version"], { encoding: "utf8" });
+    if (proc.error || proc.status !== 0) return { present: false, version: null };
+    const version = ((proc.stdout || proc.stderr || "").split("\n")[0] || "").trim();
+    return { present: true, version };
+  } catch {
+    return { present: false, version: null };
+  }
+}
+function runDoctor() {
+  const major = parseMajor(process.version);
+  const node = { version: process.version, major, ok: (major ?? 0) >= 20 };
+  const specs = [
+    { name: "flutter", stack: "Flutter" },
+    { name: "bench", stack: "Frappe" },
+    { name: "supabase", stack: "Supabase" }
+  ];
+  const tools = specs.map((s) => ({ name: s.name, stack: s.stack, ...checkTool(s.name) }));
+  const readyStacks = tools.filter((t) => t.present).map((t) => t.stack).concat(["Electron", "Next.js"]);
+  return { node, tools, readyStacks };
+}
+function formatDoctor(report) {
+  const n = report.node;
+  const lines = ["testctl doctor", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"];
+  lines.push(`  ${n.ok ? "\u2713" : "\u2717"} ${"node".padEnd(10)} ${n.version}   (>= 20${n.ok ? "" : " REQUIRED"})`);
+  for (const t of report.tools) {
+    if (t.present) lines.push(`  \u2713 ${t.name.padEnd(10)} ${t.version || ""}   \u2192 ${t.stack}`);
+    else lines.push(`  \u2298 ${t.name.padEnd(10)} not found \u2192 ${t.stack} unavailable here`);
+  }
+  lines.push("  \u2139 Electron / Next.js use the project's own jest/vitest via npx");
+  lines.push(`Ready stacks: ${report.readyStacks.join(", ")}`);
+  return lines.join("\n");
+}
+
 // lib/result.mjs
 function makeResult({
   stack,
@@ -9865,7 +9907,7 @@ function formatReport(results) {
 }
 
 // lib/runners/frappe.mjs
-var import_node_child_process = require("node:child_process");
+var import_node_child_process2 = require("node:child_process");
 var import_node_fs6 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path6 = require("node:path");
@@ -9941,7 +9983,7 @@ function runFrappe(cfg) {
     const xmlPath = (0, import_node_path6.join)(logDir, `${app}.xml`);
     const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
     if (cfg.coverage) args.push("--coverage");
-    const proc = (0, import_node_child_process.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const proc = (0, import_node_child_process2.spawnSync)("bench", args, { cwd: benchPath, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     logBuf += `
 $ bench ${args.join(" ")}
 ${proc.stdout || ""}${proc.stderr || ""}`;
@@ -9996,7 +10038,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/flutter.mjs
-var import_node_child_process2 = require("node:child_process");
+var import_node_child_process3 = require("node:child_process");
 var import_node_fs7 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path7 = require("node:path");
@@ -10030,7 +10072,7 @@ function runFlutter(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const args = cfg.coverage ? ["test", "--reporter", "json", "--coverage"] : ["test", "--reporter", "json"];
-  const proc = (0, import_node_child_process2.spawnSync)("flutter", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const proc = (0, import_node_child_process3.spawnSync)("flutter", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
   const logPath = (0, import_node_path7.join)(logDir, "flutter.log");
   let logBuf = `$ flutter ${args.join(" ")} (cwd: ${cwd})
@@ -10068,7 +10110,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/electron.mjs
-var import_node_child_process3 = require("node:child_process");
+var import_node_child_process4 = require("node:child_process");
 var import_node_fs8 = require("node:fs");
 var import_node_os3 = require("node:os");
 var import_node_path8 = require("node:path");
@@ -10094,7 +10136,7 @@ function runElectron(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const [command, ...args] = buildElectronArgv(cfg);
-  const proc = (0, import_node_child_process3.spawnSync)(command, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const proc = (0, import_node_child_process4.spawnSync)(command, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
   const logPath = (0, import_node_path8.join)(logDir, "electron.log");
   let logBuf = `$ ${command} ${args.join(" ")} (cwd: ${cwd})
@@ -10200,7 +10242,7 @@ async function runNextjs(cfg) {
 }
 
 // lib/runners/supabase.mjs
-var import_node_child_process4 = require("node:child_process");
+var import_node_child_process5 = require("node:child_process");
 var import_node_fs10 = require("node:fs");
 var import_node_os5 = require("node:os");
 var import_node_path10 = require("node:path");
@@ -10222,7 +10264,7 @@ function parseTap(tap) {
 function runSupabase(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
-  const proc = (0, import_node_child_process4.spawnSync)("supabase", ["test", "db"], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const proc = (0, import_node_child_process5.spawnSync)("supabase", ["test", "db"], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const logDir = (0, import_node_fs10.mkdtempSync)((0, import_node_path10.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
   const logPath = (0, import_node_path10.join)(logDir, "supabase.log");
   const logBuf = `$ supabase test db (cwd: ${cwd})
@@ -10328,10 +10370,16 @@ function cmdReport(projectDir) {
   console.log(formatHistoryReport(summarize(text)));
   return 0;
 }
+function cmdDoctor() {
+  const report = runDoctor();
+  console.log(formatDoctor(report));
+  return report.node.ok ? 0 : 1;
+}
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
   if (cmd === "init") return process.exit(cmdInit(projectDir));
+  if (cmd === "doctor") return process.exit(cmdDoctor());
   if (cmd === "report") return process.exit(cmdReport(projectDir));
   if (cmd === "run") {
     const rest = process.argv.slice(3);
@@ -10344,7 +10392,7 @@ async function main() {
     }
     return process.exit(await cmdRun(projectDir, only, coverage));
   }
-  console.log("Usage:\n  testctl init\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
