@@ -79,6 +79,14 @@ test('Frappe with config is a runnable target (no notice)', () => {
   assert.ok(t.config);
 });
 
+test('Frappe with INCOMPLETE config (missing site/apps) is a notice, not a failing run', () => {
+  const root = tmp();
+  const t = discoverTargets(root, { stacks: { frappe: { benchPath: '/b' } } }).find((x) => x.stack === 'frappe');
+  assert.ok(t);
+  assert.equal(t.notice, true);
+  assert.equal(t.config, undefined);
+});
+
 test('empty project yields no targets', () => {
   assert.deepEqual(discoverTargets(tmp(), {}), []);
 });

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-06-06
+
+### Fixed
+- An incompletely-configured Frappe stack (e.g. `benchPath` set but missing `site`/`apps`)
+  now shows a non-failing "needs config" notice instead of erroring and failing the whole run.
+
 ## [1.1.0] - 2026-06-06
 
 ### Added
