@@ -72,3 +72,12 @@ test('formatReport renders a needs-config notice and it does not fail the exit c
   assert.match(out, /needs benchPath/);
   assert.equal(computeExitCode(results), 0);
 });
+test('formatReport shows a coverage column (N% and —)', () => {
+  const results = [
+    makeResult({ stack: 'flutter', label: 'a', passed: 1, failed: 0, coverage: 72 }),
+    makeResult({ stack: 'nextjs', label: 'web', passed: 1, failed: 0 }),
+  ];
+  const out = formatReport(results);
+  assert.match(out, /72%/);
+  assert.match(out, /—/);
+});

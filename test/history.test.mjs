@@ -55,3 +55,8 @@ test('formatHistoryReport handles empty history', () => {
   const out = formatHistoryReport(summarize(''));
   assert.match(out, /No run history yet/);
 });
+test('historyEntry records coverage per app', () => {
+  const results = [makeResult({ stack: 'flutter', label: 'a', passed: 1, failed: 0, coverage: 80 })];
+  const e = historyEntry(results, 't');
+  assert.equal(e.apps[0].coverage, 80);
+});
