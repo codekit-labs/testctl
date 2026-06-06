@@ -9454,7 +9454,9 @@ function loadConfig(projectDir) {
     throw new Error(`Failed to parse testctl.yaml: ${e.message}`);
   }
   if (!parsed || typeof parsed !== "object") return { stacks: {} };
-  return { stacks: parsed.stacks || {} };
+  const out = { stacks: parsed.stacks || {} };
+  if (parsed.coverageMin != null) out.coverageMin = parsed.coverageMin;
+  return out;
 }
 
 // lib/discover.mjs
@@ -9909,7 +9911,7 @@ function formatReport(results) {
       lines.push(`  \u26A0 ${name}  ${r.note}`);
       continue;
     }
-    lines.push([
+    const row = [
       "  ",
       name.padEnd(26),
       `passed ${String(r.passed).padStart(4)}`,
@@ -9917,12 +9919,57 @@ function formatReport(results) {
       `skipped ${String(r.skipped).padStart(4)}`,
       fmtTime(r.durationMs).padStart(8),
       `cov ${r.coverage != null ? r.coverage + "%" : "\u2014"}`
-    ].join("  "));
+    ].join("  ");
+    lines.push(r.note ? `${row}  \u26A0 ${r.note}` : row);
   }
   for (const r of absent) {
     lines.push(`  (${LABELS[r.stack] || r.stack}: not present)`);
   }
   return lines.join("\n");
+}
+
+// lib/coverage.mjs
+var import_fast_xml_parser = __toESM(require_fxp(), 1);
+function parseLcov(text) {
+  let lf = 0, lh = 0;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("LF:")) lf += Number(line.slice(3)) || 0;
+    else if (line.startsWith("LH:")) lh += Number(line.slice(3)) || 0;
+  }
+  if (lf <= 0) return null;
+  return Math.round(lh / lf * 100);
+}
+function parseJestCoverageSummary(jsonText) {
+  let data;
+  try {
+    data = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  const pct = data && data.total && data.total.lines ? data.total.lines.pct : void 0;
+  return typeof pct === "number" ? Math.round(pct) : null;
+}
+function parseCoverageXml(xml) {
+  try {
+    const parser = new import_fast_xml_parser.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+    const doc = parser.parse(xml);
+    const rate = doc && doc.coverage ? doc.coverage["@_line-rate"] : void 0;
+    if (rate === void 0 || rate === null || rate === "") return null;
+    const n = Number(rate);
+    return Number.isNaN(n) ? null : Math.round(n * 100);
+  } catch {
+    return null;
+  }
+}
+function applyCoverageGate(results, min) {
+  if (min == null) return results;
+  for (const r of results) {
+    if (r.present && !r.errored && r.coverage != null && r.coverage < min) {
+      r.ok = false;
+      r.note = `coverage ${r.coverage}% < min ${min}%`;
+    }
+  }
+  return results;
 }
 
 // lib/spawn.mjs
@@ -9961,42 +10008,6 @@ var import_node_fs6 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path6 = require("node:path");
 var import_fast_xml_parser2 = __toESM(require_fxp(), 1);
-
-// lib/coverage.mjs
-var import_fast_xml_parser = __toESM(require_fxp(), 1);
-function parseLcov(text) {
-  let lf = 0, lh = 0;
-  for (const line of text.split("\n")) {
-    if (line.startsWith("LF:")) lf += Number(line.slice(3)) || 0;
-    else if (line.startsWith("LH:")) lh += Number(line.slice(3)) || 0;
-  }
-  if (lf <= 0) return null;
-  return Math.round(lh / lf * 100);
-}
-function parseJestCoverageSummary(jsonText) {
-  let data;
-  try {
-    data = JSON.parse(jsonText);
-  } catch {
-    return null;
-  }
-  const pct = data && data.total && data.total.lines ? data.total.lines.pct : void 0;
-  return typeof pct === "number" ? Math.round(pct) : null;
-}
-function parseCoverageXml(xml) {
-  try {
-    const parser = new import_fast_xml_parser.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
-    const doc = parser.parse(xml);
-    const rate = doc && doc.coverage ? doc.coverage["@_line-rate"] : void 0;
-    if (rate === void 0 || rate === null || rate === "") return null;
-    const n = Number(rate);
-    return Number.isNaN(n) ? null : Math.round(n * 100);
-  } catch {
-    return null;
-  }
-}
-
-// lib/runners/frappe.mjs
 function parseFrappeJUnit(xml) {
   const parser = new import_fast_xml_parser2.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
   const doc = parser.parse(xml);
@@ -10416,8 +10427,11 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null) {
   const config = loadConfig(projectDir);
+  if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
+  if (Number.isNaN(minCoverage)) minCoverage = null;
+  if (minCoverage != null) coverage = true;
   const targets = discoverTargets(projectDir, config, only);
   if (targets.length === 0) {
     console.log("No testable apps found.");
@@ -10438,6 +10452,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4) {
       return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
     }
   });
+  applyCoverageGate(results, minCoverage);
   console.log("\n" + formatReport(results));
   const code = computeExitCode(results);
   console.log(`
@@ -10480,9 +10495,12 @@ async function main() {
     }
     const concEntry = rest.find((a) => a.startsWith("--concurrency="));
     const concurrency = Math.max(1, Math.floor(Number((concEntry || "").split("=")[1])) || 4);
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency));
+    const mcEntry = rest.find((a) => a.startsWith("--min-coverage="));
+    const mc = mcEntry ? Number(mcEntry.split("=")[1]) : null;
+    const minCoverage = mc != null && !Number.isNaN(mc) ? mc : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--concurrency=N]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
