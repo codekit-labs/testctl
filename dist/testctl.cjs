@@ -10038,8 +10038,15 @@ function buildSshArgs(ssh, remoteCommand) {
   args.push(ssh.host, remoteCommand);
   return args;
 }
-function buildRemoteBenchCommand(benchPath, site, app, xmlPath) {
-  return `cd ${benchPath} && bench --site ${site} run-tests --app ${app} --junit-xml-output ${xmlPath}`;
+function buildRemoteBenchCommand(benchPath, site, value, xmlPath, kind = "app") {
+  const flag = kind === "module" ? "--module" : "--app";
+  return `cd ${benchPath} && bench --site ${site} run-tests ${flag} ${value} --junit-xml-output ${xmlPath}`;
+}
+function buildLocalBenchArgs({ site, kind, value, xmlPath, coverage }) {
+  const flag = kind === "module" ? "--module" : "--app";
+  const args = ["--site", site, "run-tests", flag, value, "--junit-xml-output", xmlPath];
+  if (coverage) args.push("--coverage");
+  return args;
 }
 function sshInvocation(ssh, remoteCommand, env = process.env) {
   const base = buildSshArgs(ssh, remoteCommand);
@@ -10069,21 +10076,23 @@ async function runFrappe(cfg) {
   let logBuf = "";
   const totals = { passed: 0, failed: 0, skipped: 0 };
   const appErrors = [];
-  for (const app of apps) {
+  const safeName = (v) => v.replace(/[^A-Za-z0-9._-]+/g, "_");
+  const units = Array.isArray(cfg.modules) && cfg.modules.length ? cfg.modules.map((m) => ({ kind: "module", value: m })) : apps.map((a) => ({ kind: "app", value: a }));
+  for (const unit of units) {
     let xmlText = null;
     if (remote) {
-      const remoteXml = `/tmp/testctl-${app}.xml`;
-      const run = await runSsh(cfg.ssh, buildRemoteBenchCommand(benchPath, site, app, remoteXml));
+      const remoteXml = `/tmp/testctl-${safeName(unit.value)}.xml`;
+      const run = await runSsh(cfg.ssh, buildRemoteBenchCommand(benchPath, site, unit.value, remoteXml, unit.kind));
       if (run.error) {
-        appErrors.push(`${app}: ${run.error}`);
+        appErrors.push(`${unit.value}: ${run.error}`);
         continue;
       }
       logBuf += `
-$ ssh ${cfg.ssh.host} (bench run-tests --app ${app})
+$ ssh ${cfg.ssh.host} (bench run-tests --${unit.kind} ${unit.value})
 ${run.proc.stdout || ""}${run.proc.stderr || ""}`;
       if (run.proc.error) {
         const msg = run.proc.error.code === "ENOENT" ? "sshpass not installed \u2014 install it or use key auth" : `remote bench failed: ${run.proc.error.message}`;
-        appErrors.push(`${app}: ${msg}`);
+        appErrors.push(`${unit.value}: ${msg}`);
         continue;
       }
       const cat = await runSsh(cfg.ssh, `cat ${remoteXml}`);
@@ -10092,15 +10101,14 @@ ${run.proc.stdout || ""}${run.proc.stderr || ""}`;
       }
       await runSsh(cfg.ssh, `rm -f ${remoteXml}`);
     } else {
-      const xmlPath = (0, import_node_path6.join)(logDir, `${app}.xml`);
-      const args = ["--site", site, "run-tests", "--app", app, "--junit-xml-output", xmlPath];
-      if (cfg.coverage) args.push("--coverage");
+      const xmlPath = (0, import_node_path6.join)(logDir, `${safeName(unit.value)}.xml`);
+      const args = buildLocalBenchArgs({ site, kind: unit.kind, value: unit.value, xmlPath, coverage: cfg.coverage });
       const proc = await spawnAsync("bench", args, { cwd: benchPath });
       logBuf += `
 $ bench ${args.join(" ")}
 ${proc.stdout || ""}${proc.stderr || ""}`;
       if (proc.error) {
-        appErrors.push(`${app}: failed to run bench: ${proc.error.message}`);
+        appErrors.push(`${unit.value}: failed to run bench: ${proc.error.message}`);
         continue;
       }
       if ((0, import_node_fs6.existsSync)(xmlPath)) xmlText = (0, import_node_fs6.readFileSync)(xmlPath, "utf8");
@@ -10111,7 +10119,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       totals.failed += r.failed;
       totals.skipped += r.skipped;
     } else {
-      appErrors.push(`${app}: no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`);
+      appErrors.push(`${unit.value}: no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`);
     }
   }
   (0, import_node_fs6.writeFileSync)(logPath, logBuf);
