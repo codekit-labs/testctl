@@ -229,6 +229,24 @@ stacks:
 A single `frappe:` object (shown above) still works unchanged. Apps within one site run serially
 (they share that site's database); only different sites run concurrently.
 
+### Running specific Frappe test modules
+
+On a large ERPNext site, `bench run-tests --app` builds the whole test-record dependency graph,
+which can be slow or fail. Scope to specific test modules instead:
+
+```yaml
+stacks:
+  frappe:
+    benchPath: /path/to/bench
+    site: test_site
+    apps: [my_app]
+    modules:
+      - my_app.my_app.doctype.thing.test_thing
+```
+
+testctl then runs `bench run-tests --module ...` for each entry. Omit `modules` to run the whole
+app as before.
+
 ### Remote Frappe over SSH
 
 Test a Frappe app on a remote bench by adding an `ssh` block (key or password). `benchPath` is

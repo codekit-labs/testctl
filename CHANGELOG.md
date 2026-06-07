@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.14.0] - 2026-06-07
+
+### Added
+- Frappe test scoping: a `frappe` target may set `modules: [dotted.test.module, ...]` to run
+  `bench run-tests --module <m>` for each instead of `--app`. This avoids the heavy ERPNext
+  test-record bootstrap (which can crash on real/restored sites), so you can run just your app's
+  tests. Without `modules`, behaviour is unchanged (`--app`). Works locally and remote over SSH.
+
 ## [1.13.0] - 2026-06-06
 
 ### Added
