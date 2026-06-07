@@ -25,6 +25,7 @@ test('parseFrappeJUnit handles a single testsuite (not wrapped in testsuites)', 
 });
 
 import { buildSshArgs, buildRemoteBenchCommand, sshInvocation } from '../../lib/runners/frappe.mjs';
+import { buildLocalBenchArgs } from '../../lib/runners/frappe.mjs';
 
 test('buildSshArgs: StrictHostKeyChecking + ConnectTimeout + key + port + host + command', () => {
   assert.deepEqual(
@@ -72,4 +73,33 @@ test('sshInvocation inline password mode', () => {
 test('sshInvocation errors when the passwordEnv var is unset', () => {
   const inv = sshInvocation({ host: 'u@h', passwordEnv: 'MISSING' }, 'cmd', {});
   assert.ok(inv.error);
+});
+
+test('buildLocalBenchArgs app-mode → --app, no --module', () => {
+  const args = buildLocalBenchArgs({ site: 's', kind: 'app', value: 'jms', xmlPath: '/tmp/x.xml' });
+  assert.deepEqual(args, ['--site', 's', 'run-tests', '--app', 'jms', '--junit-xml-output', '/tmp/x.xml']);
+});
+
+test('buildLocalBenchArgs module-mode → --module, no --app', () => {
+  const args = buildLocalBenchArgs({ site: 's', kind: 'module', value: 'jms.jms.doctype.job.test_job', xmlPath: '/tmp/x.xml' });
+  assert.deepEqual(args, ['--site', 's', 'run-tests', '--module', 'jms.jms.doctype.job.test_job', '--junit-xml-output', '/tmp/x.xml']);
+});
+
+test('buildLocalBenchArgs appends --coverage when set', () => {
+  const args = buildLocalBenchArgs({ site: 's', kind: 'app', value: 'jms', xmlPath: '/tmp/x.xml', coverage: true });
+  assert.equal(args[args.length - 1], '--coverage');
+});
+
+test('buildRemoteBenchCommand module-mode emits --module', () => {
+  assert.equal(
+    buildRemoteBenchCommand('/b', 'demo.site', 'jms.jms.doctype.job.test_job', '/tmp/x.xml', 'module'),
+    'cd /b && bench --site demo.site run-tests --module jms.jms.doctype.job.test_job --junit-xml-output /tmp/x.xml',
+  );
+});
+
+test('buildRemoteBenchCommand defaults to --app (back-compat)', () => {
+  assert.equal(
+    buildRemoteBenchCommand('/b', 'demo.site', 'jms', '/tmp/x.xml'),
+    'cd /b && bench --site demo.site run-tests --app jms --junit-xml-output /tmp/x.xml',
+  );
 });
