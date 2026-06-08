@@ -9,6 +9,12 @@ function tmpProject() {
   return mkdtempSync(join(tmpdir(), 'testctl-config-'));
 }
 
+function withTmp(yaml) {
+  const dir = tmpProject();
+  writeFileSync(join(dir, 'testctl.yaml'), yaml);
+  return dir;
+}
+
 test('returns empty stacks when no testctl.yaml exists', () => {
   const dir = tmpProject();
   const cfg = loadConfig(dir);
@@ -64,4 +70,11 @@ test('loadConfig surfaces cache:true when present and omits it otherwise', () =>
   const d2 = tmpProject();
   writeFileSync(join(d2, 'testctl.yaml'), 'stacks:\n  flutter: {}\n');
   assert.equal('cache' in loadConfig(d2), false);
+});
+
+test('loadConfig surfaces retry when present and omits it otherwise', () => {
+  const d1 = withTmp('retry: 2\nstacks:\n  flutter: {}\n');
+  assert.equal(loadConfig(d1).retry, 2);
+  const d2 = withTmp('stacks:\n  flutter: {}\n');
+  assert.equal('retry' in loadConfig(d2), false);
 });

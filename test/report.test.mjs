@@ -94,3 +94,8 @@ test('formatReport renders a cached row with a check mark', () => {
   const out = formatReport([makeResult({ stack: 'flutter', label: 'a', present: true, cached: true, note: 'unchanged since last green' })]);
   assert.match(out, /✓ Flutter \(a\)\s+cached/);
 });
+
+test('formatReport marks a flaky row with ⚑ and the retry note', () => {
+  const out = formatReport([makeResult({ stack: 'flutter', label: 'a', passed: 5, failed: 0, durationMs: 1000, flaky: true, note: 'passed on retry 1/2' })]);
+  assert.match(out, /⚑ .*passed on retry 1\/2/);
+});

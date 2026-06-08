@@ -53,3 +53,12 @@ test('makeResult defaults cached false and passes it through', () => {
   assert.equal(makeResult({ stack: 'flutter' }).cached, false);
   assert.equal(makeResult({ stack: 'flutter', cached: true }).cached, true);
 });
+
+test('makeResult defaults flaky false / attempts 1 and passes them through', () => {
+  const a = makeResult({ stack: 'flutter' });
+  assert.equal(a.flaky, false);
+  assert.equal(a.attempts, 1);
+  const b = makeResult({ stack: 'flutter', flaky: true, attempts: 3 });
+  assert.equal(b.flaky, true);
+  assert.equal(b.attempts, 3);
+});
