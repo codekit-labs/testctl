@@ -3986,10 +3986,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep, value } = collItem;
+        const { start, key, sep: sep2, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep?.[0],
+          next: key ?? sep2?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4003,7 +4003,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep) {
+          if (!keyProps.anchor && !keyProps.tag && !sep2) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4027,7 +4027,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep ?? [], {
+        const valueProps = resolveProps.resolveProps(sep2 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4043,7 +4043,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep2, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4134,7 +4134,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep = "";
+        let sep2 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4148,13 +4148,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep + cb;
-              sep = "";
+                comment += sep2 + cb;
+              sep2 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep += source;
+                sep2 += source;
               hasSpace = true;
               break;
             default:
@@ -4197,18 +4197,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep, value } = collItem;
+        const { start, key, sep: sep2, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep?.[0],
+          next: key ?? sep2?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep && !value) {
+          if (!props.anchor && !props.tag && !sep2 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4262,8 +4262,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep, null, props, onError);
+        if (!isMap && !sep2 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep2, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4275,7 +4275,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep ?? [], {
+          const valueProps = resolveProps.resolveProps(sep2 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4286,8 +4286,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep)
-                for (const st of sep) {
+              if (sep2)
+                for (const st of sep2) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4304,7 +4304,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep2, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4484,7 +4484,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep = "";
+      let sep2 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4501,24 +4501,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep + indent.slice(trimIndent) + content;
-          sep = "\n";
+          value += sep2 + indent.slice(trimIndent) + content;
+          sep2 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep === " ")
-            sep = "\n";
-          else if (!prevMoreIndented && sep === "\n")
-            sep = "\n\n";
-          value += sep + indent.slice(trimIndent) + content;
-          sep = "\n";
+          if (sep2 === " ")
+            sep2 = "\n";
+          else if (!prevMoreIndented && sep2 === "\n")
+            sep2 = "\n\n";
+          value += sep2 + indent.slice(trimIndent) + content;
+          sep2 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep === "\n")
+          if (sep2 === "\n")
             value += "\n";
           else
-            sep = "\n";
+            sep2 = "\n";
         } else {
-          value += sep + content;
-          sep = " ";
+          value += sep2 + content;
+          sep2 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4700,25 +4700,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep = " ";
+      let sep2 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep === "\n")
-            res += sep;
+          if (sep2 === "\n")
+            res += sep2;
           else
-            sep = "\n";
+            sep2 = "\n";
         } else {
-          res += sep + match[1];
-          sep = " ";
+          res += sep2 + match[1];
+          sep2 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep + (match?.[1] ?? "");
+      return res + sep2 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5528,14 +5528,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep, value }) {
+    function stringifyItem({ start, key, sep: sep2, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep)
-        for (const st of sep)
+      if (sep2)
+        for (const st of sep2)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6702,18 +6702,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep;
+          let sep2;
           if (scalar.end) {
-            sep = scalar.end;
-            sep.push(this.sourceToken);
+            sep2 = scalar.end;
+            sep2.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep = [this.sourceToken];
+            sep2 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep }]
+            items: [{ start, key: scalar, sep: sep2 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6866,15 +6866,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep = it.sep;
-                  sep.push(this.sourceToken);
+                  const sep2 = it.sep;
+                  sep2.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep }]
+                    items: [{ start: start2, key, sep: sep2 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -7068,13 +7068,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep = fc.end.splice(1, fc.end.length);
-            sep.push(this.sourceToken);
+            const sep2 = fc.end.splice(1, fc.end.length);
+            sep2.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep }]
+              items: [{ start, key: fc, sep: sep2 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -9438,7 +9438,7 @@ var require_fxp = __commonJS({
 
 // bin/testctl.mjs
 var import_node_fs11 = require("node:fs");
-var import_node_path11 = require("node:path");
+var import_node_path12 = require("node:path");
 
 // lib/config.mjs
 var import_node_fs = require("node:fs");
@@ -9932,6 +9932,42 @@ function formatReport(results) {
   return lines.join("\n");
 }
 
+// lib/changed.mjs
+var import_node_child_process2 = require("node:child_process");
+var import_node_path6 = require("node:path");
+function isUnder(f, dir) {
+  const nf = (0, import_node_path6.resolve)(f);
+  const nd = (0, import_node_path6.resolve)(dir);
+  return nf === nd || nf.startsWith(nd + import_node_path6.sep);
+}
+function selectChangedTargets(targets, changedAbsFiles, projectDir) {
+  return targets.filter((t) => {
+    if (t.notice) return true;
+    if (!t.path) return true;
+    const abs = (0, import_node_path6.resolve)(projectDir, t.path);
+    return changedAbsFiles.some((f) => isUnder(f, abs));
+  });
+}
+function gitChangedFiles(projectDir, ref = null) {
+  const git = (args) => (0, import_node_child_process2.spawnSync)("git", args, { cwd: projectDir, encoding: "utf8" });
+  const inside = git(["rev-parse", "--is-inside-work-tree"]);
+  if (inside.error || inside.status !== 0 || !/true/.test(inside.stdout || "")) {
+    return { files: null, note: "not a git repo \u2014 running all targets" };
+  }
+  const root = (git(["rev-parse", "--show-toplevel"]).stdout || "").trim() || projectDir;
+  const set = /* @__PURE__ */ new Set();
+  const add = (out) => {
+    for (const line of (out || "").split("\n")) {
+      const f = line.trim();
+      if (f) set.add((0, import_node_path6.resolve)(root, f));
+    }
+  };
+  add(git(["diff", "--name-only", "HEAD"]).stdout);
+  add(git(["ls-files", "--others", "--exclude-standard"]).stdout);
+  if (ref) add(git(["diff", "--name-only", `${ref}...HEAD`]).stdout);
+  return { files: [...set], note: null };
+}
+
 // lib/coverage.mjs
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
 function parseLcov(text) {
@@ -9977,14 +10013,14 @@ function applyCoverageGate(results, min) {
 }
 
 // lib/spawn.mjs
-var import_node_child_process2 = require("node:child_process");
+var import_node_child_process3 = require("node:child_process");
 function spawnAsync(command, args = [], opts = {}) {
-  return new Promise((resolve) => {
+  return new Promise((resolve2) => {
     let child;
     try {
-      child = (0, import_node_child_process2.spawn)(command, args, { cwd: opts.cwd, env: opts.env || process.env });
+      child = (0, import_node_child_process3.spawn)(command, args, { cwd: opts.cwd, env: opts.env || process.env });
     } catch (error) {
-      resolve({ status: null, stdout: "", stderr: "", error });
+      resolve2({ status: null, stdout: "", stderr: "", error });
       return;
     }
     let stdout = "";
@@ -9993,7 +10029,7 @@ function spawnAsync(command, args = [], opts = {}) {
     const done = (r) => {
       if (!settled) {
         settled = true;
-        resolve(r);
+        resolve2(r);
       }
     };
     if (child.stdout) child.stdout.on("data", (d) => {
@@ -10010,7 +10046,7 @@ function spawnAsync(command, args = [], opts = {}) {
 // lib/runners/frappe.mjs
 var import_node_fs6 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 var import_fast_xml_parser2 = __toESM(require_fxp(), 1);
 
 // lib/runners/shared.mjs
@@ -10108,8 +10144,8 @@ async function runFrappe(cfg) {
     return makeResult({ stack: "frappe", errored: true, error: "frappe config requires benchPath, site, and apps[]" });
   }
   const remote = !!cfg.ssh;
-  const logDir = (0, import_node_fs6.mkdtempSync)((0, import_node_path6.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
-  const logPath = (0, import_node_path6.join)(logDir, "frappe.log");
+  const logDir = (0, import_node_fs6.mkdtempSync)((0, import_node_path7.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
+  const logPath = (0, import_node_path7.join)(logDir, "frappe.log");
   let logBuf = "";
   const totals = { passed: 0, failed: 0, skipped: 0 };
   const allFailures = [];
@@ -10139,7 +10175,7 @@ ${run.proc.stdout || ""}${run.proc.stderr || ""}`;
       }
       await runSsh(cfg.ssh, `rm -f ${remoteXml}`);
     } else {
-      const xmlPath = (0, import_node_path6.join)(logDir, `${safeName(unit.value)}.xml`);
+      const xmlPath = (0, import_node_path7.join)(logDir, `${safeName(unit.value)}.xml`);
       const args = buildLocalBenchArgs({ site, kind: unit.kind, value: unit.value, xmlPath, coverage: cfg.coverage });
       const proc = await spawnAsync("bench", args, { cwd: benchPath });
       logBuf += `
@@ -10164,7 +10200,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   (0, import_node_fs6.writeFileSync)(logPath, logBuf);
   let coverage = null;
   if (cfg.coverage && !remote) {
-    for (const p of [(0, import_node_path6.join)(benchPath, "sites", "coverage.xml"), (0, import_node_path6.join)(benchPath, "coverage.xml")]) {
+    for (const p of [(0, import_node_path7.join)(benchPath, "sites", "coverage.xml"), (0, import_node_path7.join)(benchPath, "coverage.xml")]) {
       try {
         if ((0, import_node_fs6.existsSync)(p)) {
           coverage = parseCoverageXml((0, import_node_fs6.readFileSync)(p, "utf8"));
@@ -10192,7 +10228,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 // lib/runners/flutter.mjs
 var import_node_fs7 = require("node:fs");
 var import_node_os2 = require("node:os");
-var import_node_path7 = require("node:path");
+var import_node_path8 = require("node:path");
 function parseFlutterJson(output) {
   let passed = 0, failed = 0, skipped = 0;
   const names = /* @__PURE__ */ new Map();
@@ -10247,8 +10283,8 @@ async function runFlutter(cfg) {
   const cwd = cfg.path || ".";
   const args = cfg.coverage ? ["test", "--reporter", "json", "--coverage"] : ["test", "--reporter", "json"];
   const proc = await spawnAsync("flutter", args, { cwd });
-  const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
-  const logPath = (0, import_node_path7.join)(logDir, "flutter.log");
+  const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path8.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
+  const logPath = (0, import_node_path8.join)(logDir, "flutter.log");
   let logBuf = `$ flutter ${args.join(" ")} (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   if (proc.error && proc.error.code !== "ENOBUFS") {
@@ -10266,7 +10302,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   let coverage = null;
   if (cfg.coverage) {
     try {
-      const lcovPath = (0, import_node_path7.join)(cwd, "coverage", "lcov.info");
+      const lcovPath = (0, import_node_path8.join)(cwd, "coverage", "lcov.info");
       if ((0, import_node_fs7.existsSync)(lcovPath)) coverage = parseLcov((0, import_node_fs7.readFileSync)(lcovPath, "utf8"));
     } catch {
       coverage = null;
@@ -10287,7 +10323,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 // lib/runners/electron.mjs
 var import_node_fs8 = require("node:fs");
 var import_node_os3 = require("node:os");
-var import_node_path8 = require("node:path");
+var import_node_path9 = require("node:path");
 function parseJestJson(output) {
   const firstBrace = output.indexOf("{");
   const lastBrace = output.lastIndexOf("}");
@@ -10326,8 +10362,8 @@ async function runElectron(cfg) {
   const cwd = cfg.path || ".";
   const [command, ...args] = buildElectronArgv(cfg);
   const proc = await spawnAsync(command, args, { cwd });
-  const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
-  const logPath = (0, import_node_path8.join)(logDir, "electron.log");
+  const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path9.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
+  const logPath = (0, import_node_path9.join)(logDir, "electron.log");
   let logBuf = `$ ${command} ${args.join(" ")} (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   if (proc.error && proc.error.code !== "ENOBUFS") {
@@ -10350,7 +10386,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   let coverage = null;
   if (cfg.coverage && !cfg.command) {
     try {
-      const sumPath = (0, import_node_path8.join)(cwd, "coverage", "coverage-summary.json");
+      const sumPath = (0, import_node_path9.join)(cwd, "coverage", "coverage-summary.json");
       if ((0, import_node_fs8.existsSync)(sumPath)) coverage = parseJestCoverageSummary((0, import_node_fs8.readFileSync)(sumPath, "utf8"));
     } catch {
       coverage = null;
@@ -10371,7 +10407,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 // lib/runners/nextjs.mjs
 var import_node_fs9 = require("node:fs");
 var import_node_os4 = require("node:os");
-var import_node_path9 = require("node:path");
+var import_node_path10 = require("node:path");
 function evaluateCheck(check, response) {
   const path = check.path;
   const expectStatus = check.expectStatus ?? 200;
@@ -10388,8 +10424,8 @@ function evaluateCheck(check, response) {
 }
 async function runNextjs(cfg) {
   const start = Date.now();
-  const logDir = (0, import_node_fs9.mkdtempSync)((0, import_node_path9.join)((0, import_node_os4.tmpdir)(), "testctl-nextjs-"));
-  const logPath = (0, import_node_path9.join)(logDir, "nextjs.log");
+  const logDir = (0, import_node_fs9.mkdtempSync)((0, import_node_path10.join)((0, import_node_os4.tmpdir)(), "testctl-nextjs-"));
+  const logPath = (0, import_node_path10.join)(logDir, "nextjs.log");
   if (!cfg.vercelUrl) {
     (0, import_node_fs9.writeFileSync)(logPath, "No vercelUrl configured.\n");
     return makeResult({ stack: "nextjs", errored: true, error: "set nextjs.vercelUrl in testctl.yaml", rawLogPath: logPath });
@@ -10439,7 +10475,7 @@ async function runNextjs(cfg) {
 // lib/runners/supabase.mjs
 var import_node_fs10 = require("node:fs");
 var import_node_os5 = require("node:os");
-var import_node_path10 = require("node:path");
+var import_node_path11 = require("node:path");
 function parseTap(tap) {
   let passed = 0, failed = 0, skipped = 0;
   const failures = [];
@@ -10475,8 +10511,8 @@ async function runSupabase(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const proc = await spawnAsync("supabase", ["test", "db"], { cwd });
-  const logDir = (0, import_node_fs10.mkdtempSync)((0, import_node_path10.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
-  const logPath = (0, import_node_path10.join)(logDir, "supabase.log");
+  const logDir = (0, import_node_fs10.mkdtempSync)((0, import_node_path11.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
+  const logPath = (0, import_node_path11.join)(logDir, "supabase.log");
   const logBuf = `$ supabase test db (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   (0, import_node_fs10.writeFileSync)(logPath, logBuf);
@@ -10502,7 +10538,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 // bin/testctl.mjs
 var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase"];
 function cmdInit(projectDir) {
-  const path = (0, import_node_path11.join)(projectDir, "testctl.yaml");
+  const path = (0, import_node_path12.join)(projectDir, "testctl.yaml");
   if ((0, import_node_fs11.existsSync)(path)) {
     console.log("testctl.yaml already exists \u2014 leaving it untouched.");
     return 0;
@@ -10540,24 +10576,39 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
   if (minCoverage != null) coverage = true;
-  const targets = discoverTargets(projectDir, config, only);
-  if (targets.length === 0) {
-    console.log("No testable apps found.");
-  } else {
-    console.log("Discovered apps:");
-    for (const t of targets) {
-      const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
-      console.log(`  ${t.notice ? "\u26A0" : "\u2022"} ${name}${t.notice ? " \u2014 " + t.note : ""}`);
+  let targets = discoverTargets(projectDir, config, only);
+  if (changed) {
+    const { files, note } = gitChangedFiles(projectDir, changed.ref);
+    if (note) console.log(note);
+    if (files) {
+      targets = selectChangedTargets(targets, files, projectDir);
+      if (targets.length === 0) {
+        console.log("No changed apps to test.");
+        console.log("TESTCTL_JSON " + JSON.stringify({ results: [], failedLogs: [] }));
+        console.log("Exit code: 0");
+        return 0;
+      }
     }
   }
-  const runnable = targets.filter((t) => !t.notice).length;
-  if (runnable > 0) console.log(`
+  if (!quiet) {
+    if (targets.length === 0) {
+      console.log("No testable apps found.");
+    } else {
+      console.log("Discovered apps:");
+      for (const t of targets) {
+        const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
+        console.log(`  ${t.notice ? "\u26A0" : "\u2022"} ${name}${t.notice ? " \u2014 " + t.note : ""}`);
+      }
+    }
+    const runnable = targets.filter((t) => !t.notice).length;
+    if (runnable > 0) console.log(`
 \u25B6 Running ${runnable} app(s) (concurrency ${concurrency})...`);
+  }
   const results = await mapPool(targets, concurrency, async (t) => {
     try {
       return await runTarget(t, coverage);
@@ -10566,7 +10617,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     }
   });
   applyCoverageGate(results, minCoverage);
-  console.log("\n" + formatReport(results));
+  if (!quiet) console.log("\n" + formatReport(results));
   const code = computeExitCode(results);
   console.log(`
 Exit code: ${code}`);
@@ -10576,7 +10627,7 @@ Exit code: ${code}`);
   return code;
 }
 function cmdReport(projectDir) {
-  const path = (0, import_node_path11.join)(projectDir, ".testctl", "history.jsonl");
+  const path = (0, import_node_path12.join)(projectDir, ".testctl", "history.jsonl");
   let text = "";
   try {
     text = (0, import_node_fs11.readFileSync)(path, "utf8");
@@ -10611,9 +10662,12 @@ async function main() {
     const mcEntry = rest.find((a) => a.startsWith("--min-coverage="));
     const mc = mcEntry ? Number(mcEntry.split("=")[1]) : null;
     const minCoverage = mc != null && !Number.isNaN(mc) ? mc : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage));
+    const quiet = rest.includes("--quiet");
+    const changedEntry = rest.find((a) => a === "--changed" || a.startsWith("--changed="));
+    const changed = changedEntry ? { ref: changedEntry.startsWith("--changed=") ? changedEntry.split("=")[1] || null : null } : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
