@@ -9886,10 +9886,11 @@ function makeResult({
   error = null,
   label = null,
   note = null,
-  coverage = null
+  coverage = null,
+  failures = []
 }) {
   const ok = !errored && failed === 0;
-  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok };
+  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok, failures };
 }
 
 // lib/report.mjs
@@ -10011,6 +10012,24 @@ var import_node_fs6 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path6 = require("node:path");
 var import_fast_xml_parser2 = __toESM(require_fxp(), 1);
+
+// lib/runners/shared.mjs
+function ranButProducedNothing(status, counts) {
+  const total = counts.passed + counts.failed + counts.skipped;
+  return status !== 0 && total === 0;
+}
+function capFailures(failures, { maxItems = 20, maxLen = 800 } = {}) {
+  const trimmed = failures.slice(0, maxItems).map((f) => ({
+    ...f,
+    message: typeof f.message === "string" && f.message.length > maxLen ? f.message.slice(0, maxLen) + " \u2026[truncated]" : f.message
+  }));
+  if (failures.length > maxItems) {
+    trimmed.push({ test: `(+${failures.length - maxItems} more failures)`, file: null, line: null, message: "" });
+  }
+  return trimmed;
+}
+
+// lib/runners/frappe.mjs
 function parseFrappeJUnit(xml) {
   const parser = new import_fast_xml_parser2.XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
   const doc = parser.parse(xml);
@@ -10029,7 +10048,25 @@ function parseFrappeJUnit(xml) {
   }
   const failed = failures + errors;
   const passed = Math.max(0, tests - failed - skipped);
-  return { passed, failed, skipped };
+  const failures2 = [];
+  for (const s of suites) {
+    let cases = s.testcase || [];
+    cases = Array.isArray(cases) ? cases : [cases];
+    for (const c of cases) {
+      const fe = c.failure || c.error;
+      if (!fe) continue;
+      const feArr = Array.isArray(fe) ? fe : [fe];
+      const parts = feArr.map((x) => `${x["@_message"] || ""}
+${typeof x === "string" ? x : x["#text"] || ""}`.trim());
+      failures2.push({
+        test: `${c["@_classname"] || ""}.${c["@_name"] || ""}`.replace(/^\./, ""),
+        file: null,
+        line: null,
+        message: parts.join("\n").trim()
+      });
+    }
+  }
+  return { passed, failed, skipped, failures: failures2 };
 }
 function buildSshArgs(ssh, remoteCommand) {
   const args = ["-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10"];
@@ -10075,6 +10112,7 @@ async function runFrappe(cfg) {
   const logPath = (0, import_node_path6.join)(logDir, "frappe.log");
   let logBuf = "";
   const totals = { passed: 0, failed: 0, skipped: 0 };
+  const allFailures = [];
   const appErrors = [];
   const safeName = (v) => v.replace(/[^A-Za-z0-9._-]+/g, "_");
   const units = Array.isArray(cfg.modules) && cfg.modules.length ? cfg.modules.map((m) => ({ kind: "module", value: m })) : apps.map((a) => ({ kind: "app", value: a }));
@@ -10118,6 +10156,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       totals.passed += r.passed;
       totals.failed += r.failed;
       totals.skipped += r.skipped;
+      allFailures.push(...r.failures || []);
     } else {
       appErrors.push(`${unit.value}: no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`);
     }
@@ -10143,7 +10182,8 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
     skipped: totals.skipped,
     durationMs: Date.now() - start,
     rawLogPath: logPath,
-    coverage
+    coverage,
+    failures: capFailures(allFailures)
   };
   if (appErrors.length) return makeResult({ ...base, errored: true, error: appErrors.join("; ") });
   return makeResult(base);
@@ -10153,16 +10193,11 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 var import_node_fs7 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path7 = require("node:path");
-
-// lib/runners/shared.mjs
-function ranButProducedNothing(status, counts) {
-  const total = counts.passed + counts.failed + counts.skipped;
-  return status !== 0 && total === 0;
-}
-
-// lib/runners/flutter.mjs
 function parseFlutterJson(output) {
   let passed = 0, failed = 0, skipped = 0;
+  const names = /* @__PURE__ */ new Map();
+  const errors = /* @__PURE__ */ new Map();
+  const failures = [];
   for (const line of output.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("{")) continue;
@@ -10172,12 +10207,40 @@ function parseFlutterJson(output) {
     } catch {
       continue;
     }
+    if (ev.type === "testStart" && ev.test && !ev.test.hidden) {
+      names.set(ev.test.id, ev.test.name);
+      continue;
+    }
+    if (ev.type === "error" && ev.testID != null) {
+      errors.set(ev.testID, { error: ev.error || "", stackTrace: ev.stackTrace || "" });
+      continue;
+    }
     if (ev.type !== "testDone" || ev.hidden) continue;
-    if (ev.skipped) skipped += 1;
-    else if (ev.result === "success") passed += 1;
-    else failed += 1;
+    if (ev.skipped) {
+      skipped += 1;
+      continue;
+    }
+    if (ev.result === "success") {
+      passed += 1;
+      continue;
+    }
+    failed += 1;
+    const err = errors.get(ev.testID) || { error: "", stackTrace: "" };
+    let file = null, lineNo = null;
+    const m = /([\w./-]+\.dart)\s+(\d+):\d+/.exec(err.stackTrace || "");
+    if (m) {
+      file = m[1];
+      lineNo = Number(m[2]);
+    }
+    failures.push({
+      test: names.get(ev.testID) || "unknown test",
+      file,
+      line: lineNo,
+      message: `${err.error}
+${err.stackTrace}`.trim()
+    });
   }
-  return { passed, failed, skipped };
+  return { passed, failed, skipped, failures };
 }
 async function runFlutter(cfg) {
   const start = Date.now();
@@ -10216,7 +10279,8 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
     skipped: counts.skipped,
     durationMs: Date.now() - start,
     rawLogPath: logPath,
-    coverage
+    coverage,
+    failures: capFailures(counts.failures || [])
   });
 }
 
@@ -10231,10 +10295,25 @@ function parseJestJson(output) {
     throw new Error("no JSON object found in jest output");
   }
   const data = JSON.parse(output.slice(firstBrace, lastBrace + 1));
+  const failures = [];
+  for (const tr of data.testResults || []) {
+    const file = (tr.name || "").split("/").pop() || null;
+    for (const ar of tr.assertionResults || []) {
+      if (ar.status === "failed") {
+        failures.push({
+          test: ar.fullName || ar.title || "unknown test",
+          file,
+          line: null,
+          message: ((ar.failureMessages || [])[0] || "").trim()
+        });
+      }
+    }
+  }
   return {
     passed: Number(data.numPassedTests || 0),
     failed: Number(data.numFailedTests || 0),
-    skipped: Number(data.numPendingTests || 0)
+    skipped: Number(data.numPendingTests || 0),
+    failures
   };
 }
 function buildElectronArgv(cfg) {
@@ -10284,7 +10363,8 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
     skipped: counts.skipped,
     durationMs: Date.now() - start,
     rawLogPath: logPath,
-    coverage
+    coverage,
+    failures: capFailures(counts.failures || [])
   });
 }
 
@@ -10318,6 +10398,7 @@ async function runNextjs(cfg) {
   const timeoutMs = cfg.timeoutMs ?? 15e3;
   const base = cfg.vercelUrl.replace(/\/$/, "");
   let passed = 0, failed = 0;
+  const failures = [];
   let logBuf = `Vercel smoke test: ${base}
 `;
   for (const check of checks) {
@@ -10336,7 +10417,10 @@ async function runNextjs(cfg) {
     }
     const result = evaluateCheck(check, response);
     if (result.ok) passed += 1;
-    else failed += 1;
+    else {
+      failed += 1;
+      failures.push({ test: result.path, file: null, line: null, message: result.reason });
+    }
     logBuf += `${result.ok ? "PASS" : "FAIL"} ${url} \u2014 ${result.reason}
 `;
   }
@@ -10347,7 +10431,8 @@ async function runNextjs(cfg) {
     failed,
     skipped: 0,
     durationMs: Date.now() - start,
-    rawLogPath: logPath
+    rawLogPath: logPath,
+    failures: capFailures(failures)
   });
 }
 
@@ -10357,18 +10442,34 @@ var import_node_os5 = require("node:os");
 var import_node_path10 = require("node:path");
 function parseTap(tap) {
   let passed = 0, failed = 0, skipped = 0;
+  const failures = [];
+  let current = null;
   for (const line of tap.split("\n")) {
     const t = line.trim();
     const isDirective = /#\s*(skip|todo)\b/i.test(t);
     if (/^ok\b/.test(t)) {
+      current = null;
       if (isDirective) skipped += 1;
       else passed += 1;
     } else if (/^not ok\b/.test(t)) {
-      if (isDirective) skipped += 1;
-      else failed += 1;
+      if (isDirective) {
+        skipped += 1;
+        current = null;
+        continue;
+      }
+      failed += 1;
+      const desc = (t.replace(/^not ok\s*\d*\s*-?\s*/, "") || "unnamed test").trim();
+      current = { test: desc, file: null, line: null, message: t };
+      failures.push(current);
+    } else if (current && t.startsWith("#")) {
+      current.message += `
+${t}`;
+    } else if (t === "") {
+    } else {
+      current = null;
     }
   }
-  return { passed, failed, skipped };
+  return { passed, failed, skipped, failures };
 }
 async function runSupabase(cfg) {
   const start = Date.now();
@@ -10393,7 +10494,8 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
     failed: counts.failed,
     skipped: counts.skipped,
     durationMs: Date.now() - start,
-    rawLogPath: logPath
+    rawLogPath: logPath,
+    failures: capFailures(counts.failures || [])
   });
 }
 
