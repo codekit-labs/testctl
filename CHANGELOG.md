@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.21.0] - 2026-06-08
+
+### Added
+- `testctl init --ci` scaffolds `.github/workflows/testctl.yml` — a turnkey GitHub Actions workflow
+  that fetches the dependency-free engine bundle, runs `testctl run --quiet --report-junit=…`, and
+  uploads the JUnit report. Never overwrites an existing workflow.
+
 ## [1.20.0] - 2026-06-08
 
 ### Added
