@@ -18,12 +18,14 @@ project.
 
 1. **Find real failures.** Run the engine:
    `node "<skill-base>/../../dist/testctl.cjs" run` (scoped to the arg if given) and read the
-   `TESTCTL_JSON` line. Take only entries in `failedLogs` — IGNORE "needs config" notices and
-   not-present stacks. If there are none, say "no failures" and stop.
+   `TESTCTL_JSON` line. Take the `results[]` entries with `failed > 0` — IGNORE "needs config"
+   notices and not-present stacks. Each such entry carries a `failures[]` digest
+   (`{ test, file, line, message }` per failing test). If there are none, say "no failures" and stop.
 
 2. **For each failure, ONE AT A TIME (never batch):**
-   a. Read the failing test, the implicated app code, and the raw log at `rawLogPath`
-      (stack trace / assertion).
+   a. Read the failure's digest entry (`test`, `file`, `line`, `message`) from `failures[]` — that
+      is usually enough to root-cause. Open the raw log at `rawLogPath` ONLY when the digest lacks
+      detail. Then read the implicated app/test code.
    b. **Root-cause it** — invoke the `systematic-debugging` skill. Find WHY it fails; do not
       patch the symptom.
    c. **App vs test:** if the test correctly encodes intended behavior, fix the **app**. If the
