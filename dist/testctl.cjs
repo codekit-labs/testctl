@@ -9437,7 +9437,7 @@ var require_fxp = __commonJS({
 });
 
 // bin/testctl.mjs
-var import_node_fs12 = require("node:fs");
+var import_node_fs13 = require("node:fs");
 var import_node_path13 = require("node:path");
 
 // lib/config.mjs
@@ -10199,6 +10199,24 @@ async function postWebhook(url, payload) {
   }
 }
 
+// lib/watch.mjs
+var import_node_fs6 = require("node:fs");
+var IGNORE = ["node_modules", ".git", "build", ".dart_tool", ".next", "dist", "out", "Pods", "vendor", ".venv", "__pycache__", "coverage", ".testctl"];
+function isWatchableChange(filename) {
+  if (!filename) return false;
+  const parts = String(filename).split(/[\\/]/);
+  if (parts.some((p) => IGNORE.includes(p))) return false;
+  return true;
+}
+function watchProject(dir, onChange, { debounceMs = 300 } = {}) {
+  let timer = null;
+  return (0, import_node_fs6.watch)(dir, { recursive: true }, (_event, filename) => {
+    if (!isWatchableChange(filename)) return;
+    clearTimeout(timer);
+    timer = setTimeout(onChange, debounceMs);
+  });
+}
+
 // lib/coverage.mjs
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
 function parseLcov(text) {
@@ -10286,7 +10304,7 @@ function spawnAsync(command, args = [], opts = {}) {
 }
 
 // lib/runners/frappe.mjs
-var import_node_fs6 = require("node:fs");
+var import_node_fs7 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path7 = require("node:path");
 var import_fast_xml_parser2 = __toESM(require_fxp(), 1);
@@ -10386,7 +10404,7 @@ async function runFrappe(cfg) {
     return makeResult({ stack: "frappe", errored: true, error: "frappe config requires benchPath, site, and apps[]" });
   }
   const remote = !!cfg.ssh;
-  const logDir = (0, import_node_fs6.mkdtempSync)((0, import_node_path7.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
+  const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path7.join)((0, import_node_os.tmpdir)(), "testctl-frappe-"));
   const logPath = (0, import_node_path7.join)(logDir, "frappe.log");
   let logBuf = "";
   const totals = { passed: 0, failed: 0, skipped: 0 };
@@ -10427,7 +10445,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
         appErrors.push(`${unit.value}: failed to run bench: ${proc.error.message}`);
         continue;
       }
-      if ((0, import_node_fs6.existsSync)(xmlPath)) xmlText = (0, import_node_fs6.readFileSync)(xmlPath, "utf8");
+      if ((0, import_node_fs7.existsSync)(xmlPath)) xmlText = (0, import_node_fs7.readFileSync)(xmlPath, "utf8");
     }
     if (xmlText) {
       const r = parseFrappeJUnit(xmlText);
@@ -10439,13 +10457,13 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       appErrors.push(`${unit.value}: no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`);
     }
   }
-  (0, import_node_fs6.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs7.writeFileSync)(logPath, logBuf);
   let coverage = null;
   if (cfg.coverage && !remote) {
     for (const p of [(0, import_node_path7.join)(benchPath, "sites", "coverage.xml"), (0, import_node_path7.join)(benchPath, "coverage.xml")]) {
       try {
-        if ((0, import_node_fs6.existsSync)(p)) {
-          coverage = parseCoverageXml((0, import_node_fs6.readFileSync)(p, "utf8"));
+        if ((0, import_node_fs7.existsSync)(p)) {
+          coverage = parseCoverageXml((0, import_node_fs7.readFileSync)(p, "utf8"));
           break;
         }
       } catch {
@@ -10468,7 +10486,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/flutter.mjs
-var import_node_fs7 = require("node:fs");
+var import_node_fs8 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path8 = require("node:path");
 function parseFlutterJson(output) {
@@ -10525,18 +10543,18 @@ async function runFlutter(cfg) {
   const cwd = cfg.path || ".";
   const args = cfg.coverage ? ["test", "--reporter", "json", "--coverage"] : ["test", "--reporter", "json"];
   const proc = await spawnAsync("flutter", args, { cwd });
-  const logDir = (0, import_node_fs7.mkdtempSync)((0, import_node_path8.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
+  const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os2.tmpdir)(), "testctl-flutter-"));
   const logPath = (0, import_node_path8.join)(logDir, "flutter.log");
   let logBuf = `$ flutter ${args.join(" ")} (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   if (proc.error && proc.error.code !== "ENOBUFS") {
-    (0, import_node_fs7.writeFileSync)(logPath, logBuf);
+    (0, import_node_fs8.writeFileSync)(logPath, logBuf);
     return makeResult({ stack: "flutter", errored: true, error: `failed to run flutter: ${proc.error.message}`, rawLogPath: logPath });
   }
   if (proc.error && proc.error.code === "ENOBUFS") {
     logBuf += "\n[testctl] output truncated at maxBuffer\n";
   }
-  (0, import_node_fs7.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs8.writeFileSync)(logPath, logBuf);
   const counts = parseFlutterJson(proc.stdout || "");
   if (ranButProducedNothing(proc.status, counts)) {
     return makeResult({ stack: "flutter", errored: true, error: `flutter exited ${proc.status} with no test results`, rawLogPath: logPath });
@@ -10545,7 +10563,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   if (cfg.coverage) {
     try {
       const lcovPath = (0, import_node_path8.join)(cwd, "coverage", "lcov.info");
-      if ((0, import_node_fs7.existsSync)(lcovPath)) coverage = parseLcov((0, import_node_fs7.readFileSync)(lcovPath, "utf8"));
+      if ((0, import_node_fs8.existsSync)(lcovPath)) coverage = parseLcov((0, import_node_fs8.readFileSync)(lcovPath, "utf8"));
     } catch {
       coverage = null;
     }
@@ -10563,7 +10581,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/electron.mjs
-var import_node_fs8 = require("node:fs");
+var import_node_fs9 = require("node:fs");
 var import_node_os3 = require("node:os");
 var import_node_path9 = require("node:path");
 function parseJestJson(output) {
@@ -10604,18 +10622,18 @@ async function runElectron(cfg) {
   const cwd = cfg.path || ".";
   const [command, ...args] = buildElectronArgv(cfg);
   const proc = await spawnAsync(command, args, { cwd });
-  const logDir = (0, import_node_fs8.mkdtempSync)((0, import_node_path9.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
+  const logDir = (0, import_node_fs9.mkdtempSync)((0, import_node_path9.join)((0, import_node_os3.tmpdir)(), "testctl-electron-"));
   const logPath = (0, import_node_path9.join)(logDir, "electron.log");
   let logBuf = `$ ${command} ${args.join(" ")} (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
   if (proc.error && proc.error.code !== "ENOBUFS") {
-    (0, import_node_fs8.writeFileSync)(logPath, logBuf);
+    (0, import_node_fs9.writeFileSync)(logPath, logBuf);
     return makeResult({ stack: "electron", errored: true, error: `failed to run jest: ${proc.error.message}`, rawLogPath: logPath });
   }
   if (proc.error && proc.error.code === "ENOBUFS") {
     logBuf += "\n[testctl] output truncated at maxBuffer\n";
   }
-  (0, import_node_fs8.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs9.writeFileSync)(logPath, logBuf);
   let counts;
   try {
     counts = parseJestJson(proc.stdout || "");
@@ -10629,7 +10647,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   if (cfg.coverage && !cfg.command) {
     try {
       const sumPath = (0, import_node_path9.join)(cwd, "coverage", "coverage-summary.json");
-      if ((0, import_node_fs8.existsSync)(sumPath)) coverage = parseJestCoverageSummary((0, import_node_fs8.readFileSync)(sumPath, "utf8"));
+      if ((0, import_node_fs9.existsSync)(sumPath)) coverage = parseJestCoverageSummary((0, import_node_fs9.readFileSync)(sumPath, "utf8"));
     } catch {
       coverage = null;
     }
@@ -10647,7 +10665,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 }
 
 // lib/runners/nextjs.mjs
-var import_node_fs9 = require("node:fs");
+var import_node_fs10 = require("node:fs");
 var import_node_os4 = require("node:os");
 var import_node_path10 = require("node:path");
 function evaluateCheck(check, response) {
@@ -10666,10 +10684,10 @@ function evaluateCheck(check, response) {
 }
 async function runNextjs(cfg) {
   const start = Date.now();
-  const logDir = (0, import_node_fs9.mkdtempSync)((0, import_node_path10.join)((0, import_node_os4.tmpdir)(), "testctl-nextjs-"));
+  const logDir = (0, import_node_fs10.mkdtempSync)((0, import_node_path10.join)((0, import_node_os4.tmpdir)(), "testctl-nextjs-"));
   const logPath = (0, import_node_path10.join)(logDir, "nextjs.log");
   if (!cfg.vercelUrl) {
-    (0, import_node_fs9.writeFileSync)(logPath, "No vercelUrl configured.\n");
+    (0, import_node_fs10.writeFileSync)(logPath, "No vercelUrl configured.\n");
     return makeResult({ stack: "nextjs", errored: true, error: "set nextjs.vercelUrl in testctl.yaml", rawLogPath: logPath });
   }
   const checks = Array.isArray(cfg.checks) && cfg.checks.length ? cfg.checks : [{ path: "/", expectStatus: 200 }];
@@ -10702,7 +10720,7 @@ async function runNextjs(cfg) {
     logBuf += `${result.ok ? "PASS" : "FAIL"} ${url} \u2014 ${result.reason}
 `;
   }
-  (0, import_node_fs9.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs10.writeFileSync)(logPath, logBuf);
   return makeResult({
     stack: "nextjs",
     passed,
@@ -10715,7 +10733,7 @@ async function runNextjs(cfg) {
 }
 
 // lib/runners/supabase.mjs
-var import_node_fs10 = require("node:fs");
+var import_node_fs11 = require("node:fs");
 var import_node_os5 = require("node:os");
 var import_node_path11 = require("node:path");
 function parseTap(tap) {
@@ -10753,11 +10771,11 @@ async function runSupabase(cfg) {
   const start = Date.now();
   const cwd = cfg.path || ".";
   const proc = await spawnAsync("supabase", ["test", "db"], { cwd });
-  const logDir = (0, import_node_fs10.mkdtempSync)((0, import_node_path11.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
+  const logDir = (0, import_node_fs11.mkdtempSync)((0, import_node_path11.join)((0, import_node_os5.tmpdir)(), "testctl-supabase-"));
   const logPath = (0, import_node_path11.join)(logDir, "supabase.log");
   const logBuf = `$ supabase test db (cwd: ${cwd})
 ${proc.stdout || ""}${proc.stderr || ""}`;
-  (0, import_node_fs10.writeFileSync)(logPath, logBuf);
+  (0, import_node_fs11.writeFileSync)(logPath, logBuf);
   if (proc.error) {
     const msg = proc.error.code === "ENOENT" ? "supabase CLI not found \u2014 install it and run 'supabase start'" : `failed to run supabase: ${proc.error.message}`;
     return makeResult({ stack: "supabase", errored: true, error: msg, rawLogPath: logPath });
@@ -10779,7 +10797,7 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
 
 // lib/cache.mjs
 var import_node_crypto = require("node:crypto");
-var import_node_fs11 = require("node:fs");
+var import_node_fs12 = require("node:fs");
 var import_node_path12 = require("node:path");
 var SKIP = /* @__PURE__ */ new Set([
   "node_modules",
@@ -10801,7 +10819,7 @@ var SKIP = /* @__PURE__ */ new Set([
 function walkFiles(dir, acc) {
   let entries;
   try {
-    entries = (0, import_node_fs11.readdirSync)(dir, { withFileTypes: true });
+    entries = (0, import_node_fs12.readdirSync)(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -10813,7 +10831,7 @@ function walkFiles(dir, acc) {
   }
 }
 function hashApp(absPath) {
-  if (!(0, import_node_fs11.existsSync)(absPath)) return null;
+  if (!(0, import_node_fs12.existsSync)(absPath)) return null;
   const files = [];
   walkFiles(absPath, files);
   files.sort();
@@ -10822,7 +10840,7 @@ function hashApp(absPath) {
     try {
       h.update((0, import_node_path12.relative)(absPath, f));
       h.update("\0");
-      h.update((0, import_node_fs11.readFileSync)(f));
+      h.update((0, import_node_fs12.readFileSync)(f));
       h.update("\0");
     } catch {
     }
@@ -10837,7 +10855,7 @@ function decideCached(entry, currentHash) {
 }
 function loadCache(projectDir) {
   try {
-    return JSON.parse((0, import_node_fs11.readFileSync)((0, import_node_path12.join)(projectDir, ".testctl", "cache.json"), "utf8")) || {};
+    return JSON.parse((0, import_node_fs12.readFileSync)((0, import_node_path12.join)(projectDir, ".testctl", "cache.json"), "utf8")) || {};
   } catch {
     return {};
   }
@@ -10845,10 +10863,10 @@ function loadCache(projectDir) {
 function saveCache(projectDir, cache) {
   try {
     const tdir = (0, import_node_path12.join)(projectDir, ".testctl");
-    if (!(0, import_node_fs11.existsSync)(tdir)) (0, import_node_fs11.mkdirSync)(tdir, { recursive: true });
+    if (!(0, import_node_fs12.existsSync)(tdir)) (0, import_node_fs12.mkdirSync)(tdir, { recursive: true });
     const gi = (0, import_node_path12.join)(tdir, ".gitignore");
-    if (!(0, import_node_fs11.existsSync)(gi)) (0, import_node_fs11.writeFileSync)(gi, "*\n");
-    (0, import_node_fs11.writeFileSync)((0, import_node_path12.join)(tdir, "cache.json"), JSON.stringify(cache));
+    if (!(0, import_node_fs12.existsSync)(gi)) (0, import_node_fs12.writeFileSync)(gi, "*\n");
+    (0, import_node_fs12.writeFileSync)((0, import_node_path12.join)(tdir, "cache.json"), JSON.stringify(cache));
   } catch {
   }
 }
@@ -10857,11 +10875,11 @@ function saveCache(projectDir, cache) {
 var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase"];
 function cmdInit(projectDir, { ci = false } = {}) {
   const path = (0, import_node_path13.join)(projectDir, "testctl.yaml");
-  if ((0, import_node_fs12.existsSync)(path)) {
+  if ((0, import_node_fs13.existsSync)(path)) {
     console.log("testctl.yaml already exists \u2014 leaving it untouched.");
   } else {
     const detection = scanProject(projectDir, (0, import_node_os6.homedir)());
-    (0, import_node_fs12.writeFileSync)(path, buildInitYaml(detection));
+    (0, import_node_fs13.writeFileSync)(path, buildInitYaml(detection));
     const a = detection.auto;
     console.log(`Created ${path}`);
     console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
@@ -10873,11 +10891,11 @@ function cmdInit(projectDir, { ci = false } = {}) {
   if (ci) {
     const wfDir = (0, import_node_path13.join)(projectDir, ".github", "workflows");
     const wfPath = (0, import_node_path13.join)(wfDir, "testctl.yml");
-    if ((0, import_node_fs12.existsSync)(wfPath)) {
+    if ((0, import_node_fs13.existsSync)(wfPath)) {
       console.log(".github/workflows/testctl.yml already exists \u2014 leaving it untouched.");
     } else {
-      (0, import_node_fs12.mkdirSync)(wfDir, { recursive: true });
-      (0, import_node_fs12.writeFileSync)(wfPath, buildWorkflowYaml());
+      (0, import_node_fs13.mkdirSync)(wfDir, { recursive: true });
+      (0, import_node_fs13.writeFileSync)(wfPath, buildWorkflowYaml());
       console.log(`Created ${wfPath}`);
     }
   }
@@ -11006,21 +11024,21 @@ Exit code: ${code}`);
   console.log("TESTCTL_JSON " + JSON.stringify({ results, failedLogs }));
   if (junitPath) {
     try {
-      (0, import_node_fs12.writeFileSync)((0, import_node_path13.resolve)(projectDir, junitPath), toJUnitXml(results));
+      (0, import_node_fs13.writeFileSync)((0, import_node_path13.resolve)(projectDir, junitPath), toJUnitXml(results));
     } catch (e) {
       console.warn(`testctl: could not write junit report: ${e.message}`);
     }
   }
   if (sarifPath) {
     try {
-      (0, import_node_fs12.writeFileSync)((0, import_node_path13.resolve)(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2));
+      (0, import_node_fs13.writeFileSync)((0, import_node_path13.resolve)(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2));
     } catch (e) {
       console.warn(`testctl: could not write sarif report: ${e.message}`);
     }
   }
   if (htmlPath) {
     try {
-      (0, import_node_fs12.writeFileSync)((0, import_node_path13.resolve)(projectDir, htmlPath), toHtml(results));
+      (0, import_node_fs13.writeFileSync)((0, import_node_path13.resolve)(projectDir, htmlPath), toHtml(results));
     } catch (e) {
       console.warn(`testctl: could not write html report: ${e.message}`);
     }
@@ -11028,9 +11046,9 @@ Exit code: ${code}`);
   appendHistory(projectDir, historyEntry(results, (/* @__PURE__ */ new Date()).toISOString()));
   try {
     const tdir = (0, import_node_path13.join)(projectDir, ".testctl");
-    if (!(0, import_node_fs12.existsSync)(tdir)) (0, import_node_fs12.mkdirSync)(tdir, { recursive: true });
-    if (!(0, import_node_fs12.existsSync)((0, import_node_path13.join)(tdir, ".gitignore"))) (0, import_node_fs12.writeFileSync)((0, import_node_path13.join)(tdir, ".gitignore"), "*\n");
-    (0, import_node_fs12.writeFileSync)((0, import_node_path13.join)(tdir, "last-run.json"), JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), results }));
+    if (!(0, import_node_fs13.existsSync)(tdir)) (0, import_node_fs13.mkdirSync)(tdir, { recursive: true });
+    if (!(0, import_node_fs13.existsSync)((0, import_node_path13.join)(tdir, ".gitignore"))) (0, import_node_fs13.writeFileSync)((0, import_node_path13.join)(tdir, ".gitignore"), "*\n");
+    (0, import_node_fs13.writeFileSync)((0, import_node_path13.join)(tdir, "last-run.json"), JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), results }));
   } catch {
   }
   return code;
@@ -11039,7 +11057,7 @@ function cmdReport(projectDir) {
   const path = (0, import_node_path13.join)(projectDir, ".testctl", "history.jsonl");
   let text = "";
   try {
-    text = (0, import_node_fs12.readFileSync)(path, "utf8");
+    text = (0, import_node_fs13.readFileSync)(path, "utf8");
   } catch {
     text = "";
   }
@@ -11049,13 +11067,32 @@ function cmdReport(projectDir) {
 function cmdExplain(projectDir) {
   let parsed;
   try {
-    parsed = JSON.parse((0, import_node_fs12.readFileSync)((0, import_node_path13.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
+    parsed = JSON.parse((0, import_node_fs13.readFileSync)((0, import_node_path13.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
   } catch {
     console.log("No recent run \u2014 run `testctl run` first.");
     return 0;
   }
   console.log(formatExplain(groupFailures(parsed.results || [])));
   return 0;
+}
+async function cmdWatch(projectDir, runOnce) {
+  await runOnce();
+  console.log("\n\u{1F440} watching for changes \u2014 Ctrl-C to stop");
+  let running = false;
+  watchProject(projectDir, async () => {
+    if (running) return;
+    running = true;
+    console.log("\n\u2014 change detected, re-running \u2014");
+    try {
+      await runOnce();
+    } catch (e) {
+      console.warn(`testctl: ${e.message}`);
+    }
+    console.log("\n\u{1F440} watching for changes \u2014 Ctrl-C to stop");
+    running = false;
+  });
+  return new Promise(() => {
+  });
 }
 function cmdDoctor() {
   const report = runDoctor();
@@ -11097,9 +11134,15 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
     const notifyEntry = rest.find((a) => a.startsWith("--notify="));
     const notifyUrl = notifyEntry ? notifyEntry.split("=").slice(1).join("=") || null : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl));
+    const watch2 = rest.includes("--watch");
+    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl);
+    if (watch2) {
+      await cmdWatch(projectDir, runOnce);
+      return;
+    }
+    return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url]\n  testctl report\n  testctl explain");
+  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain");
   return process.exit(cmd ? 2 : 0);
 }
 main();
