@@ -9457,6 +9457,7 @@ function loadConfig(projectDir) {
   const out = { stacks: parsed.stacks || {} };
   if (parsed.coverageMin != null) out.coverageMin = parsed.coverageMin;
   if (parsed.cache != null) out.cache = parsed.cache;
+  if (parsed.retry != null) out.retry = parsed.retry;
   return out;
 }
 
@@ -9889,10 +9890,12 @@ function makeResult({
   note = null,
   coverage = null,
   failures = [],
-  cached = false
+  cached = false,
+  flaky = false,
+  attempts = 1
 }) {
   const ok = !errored && failed === 0;
-  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok, failures, cached };
+  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok, failures, cached, flaky, attempts };
 }
 
 // lib/report.mjs
@@ -9933,7 +9936,8 @@ function formatReport(results) {
       fmtTime(r.durationMs).padStart(8),
       `cov ${r.coverage != null ? r.coverage + "%" : "\u2014"}`
     ].join("  ");
-    lines.push(r.note ? `${row}  \u26A0 ${r.note}` : row);
+    const tail = r.flaky ? `  \u2691 ${r.note || "flaky"}` : r.note ? `  \u26A0 ${r.note}` : "";
+    lines.push(row + tail);
   }
   return lines.join("\n");
 }
@@ -10047,6 +10051,11 @@ ${f.message}` } };
     $schema: "https://json.schemastore.org/sarif-2.1.0.json",
     runs: [{ tool: { driver: { name: "testctl", informationUri: "https://github.com/codekit-labs/testctl", rules: [] } }, results: out }]
   };
+}
+
+// lib/retry.mjs
+function shouldRetry(ok, retriesDone, maxRetries) {
+  return !ok && retriesDone < maxRetries;
 }
 
 // lib/coverage.mjs
@@ -10733,12 +10742,14 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
   if (minCoverage != null) coverage = true;
   const useCache = cache || config.cache === true;
+  if (retries == null) retries = config.retry != null ? Number(config.retry) : 0;
+  if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
   if (changed) {
     const { files, note } = gitChangedFiles(projectDir, changed.ref);
@@ -10782,11 +10793,27 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   }
   const toRun = decisions.filter((d) => !d.cached).map((d) => d.t);
   const ran = await mapPool(toRun, concurrency, async (t) => {
-    try {
-      return await runTarget(t, coverage);
-    } catch (e) {
-      return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
+    const runOnce = async () => {
+      try {
+        return await runTarget(t, coverage);
+      } catch (e) {
+        return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
+      }
+    };
+    let result = await runOnce();
+    let attempts = 1;
+    while (shouldRetry(result.ok, attempts - 1, retries)) {
+      result = await runOnce();
+      attempts += 1;
     }
+    result.attempts = attempts;
+    if (result.ok && attempts > 1) {
+      result.flaky = true;
+      result.note = `passed on retry ${attempts - 1}/${retries}`;
+    } else if (!result.ok && retries > 0) {
+      result.note = `failed after ${retries} retr${retries === 1 ? "y" : "ies"}`;
+    }
+    return result;
   });
   let ri = 0;
   const results = decisions.map(
@@ -10868,9 +10895,11 @@ async function main() {
     const junitPath = junitEntry ? junitEntry.includes("=") ? junitEntry.split("=")[1] || "testctl-junit.xml" : "testctl-junit.xml" : null;
     const sarifEntry = rest.find((a) => a === "--report-sarif" || a.startsWith("--report-sarif="));
     const sarifPath = sarifEntry ? sarifEntry.includes("=") ? sarifEntry.split("=")[1] || "testctl-sarif.json" : "testctl-sarif.json" : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath));
+    const retryEntry = rest.find((a) => a.startsWith("--retry="));
+    const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
