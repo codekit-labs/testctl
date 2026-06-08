@@ -12,6 +12,7 @@ import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
 import { toJUnitXml, toSarif } from '../lib/export.mjs';
+import { shouldRetry } from '../lib/retry.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
@@ -63,12 +64,14 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
   if (minCoverage != null) coverage = true;
   const useCache = cache || config.cache === true;
+  if (retries == null) retries = config.retry != null ? Number(config.retry) : 0;
+  if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
 
   if (changed) {
@@ -115,11 +118,27 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
 
   const toRun = decisions.filter((d) => !d.cached).map((d) => d.t);
   const ran = await mapPool(toRun, concurrency, async (t) => {
-    try {
-      return await runTarget(t, coverage);
-    } catch (e) {
-      return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
+    const runOnce = async () => {
+      try {
+        return await runTarget(t, coverage);
+      } catch (e) {
+        return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
+      }
+    };
+    let result = await runOnce();
+    let attempts = 1;
+    while (shouldRetry(result.ok, attempts - 1, retries)) {
+      result = await runOnce();
+      attempts += 1;
     }
+    result.attempts = attempts;
+    if (result.ok && attempts > 1) {
+      result.flaky = true;
+      result.note = `passed on retry ${attempts - 1}/${retries}`;
+    } else if (!result.ok && retries > 0) {
+      result.note = `failed after ${retries} retr${retries === 1 ? 'y' : 'ies'}`;
+    }
+    return result;
   });
 
   let ri = 0;
@@ -207,9 +226,11 @@ async function main() {
     const junitPath = junitEntry ? (junitEntry.includes('=') ? junitEntry.split('=')[1] || 'testctl-junit.xml' : 'testctl-junit.xml') : null;
     const sarifEntry = rest.find((a) => a === '--report-sarif' || a.startsWith('--report-sarif='));
     const sarifPath = sarifEntry ? (sarifEntry.includes('=') ? sarifEntry.split('=')[1] || 'testctl-sarif.json' : 'testctl-sarif.json') : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath));
+    const retryEntry = rest.find((a) => a.startsWith('--retry='));
+    const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
