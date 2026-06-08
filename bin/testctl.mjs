@@ -16,6 +16,7 @@ import { toJUnitXml, toSarif, toHtml } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
 import { buildNotifyPayload, postWebhook } from '../lib/notify.mjs';
+import { watchProject } from '../lib/watch.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
@@ -234,6 +235,21 @@ function cmdExplain(projectDir) {
   return 0;
 }
 
+async function cmdWatch(projectDir, runOnce) {
+  await runOnce();
+  console.log('\n👀 watching for changes — Ctrl-C to stop');
+  let running = false;
+  watchProject(projectDir, async () => {
+    if (running) return;
+    running = true;
+    console.log('\n— change detected, re-running —');
+    try { await runOnce(); } catch (e) { console.warn(`testctl: ${e.message}`); }
+    console.log('\n👀 watching for changes — Ctrl-C to stop');
+    running = false;
+  });
+  return new Promise(() => {}); // keep the process alive until interrupted
+}
+
 function cmdDoctor() {
   const report = runDoctor();
   console.log(formatDoctor(report));
@@ -277,9 +293,12 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
     const notifyEntry = rest.find((a) => a.startsWith('--notify='));
     const notifyUrl = notifyEntry ? notifyEntry.split('=').slice(1).join('=') || null : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl));
+    const watch = rest.includes('--watch');
+    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl);
+    if (watch) { await cmdWatch(projectDir, runOnce); return; }
+    return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url]\n  testctl report\n  testctl explain');
+  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain');
   return process.exit(cmd ? 2 : 0);
 }
 
