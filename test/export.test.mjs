@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeResult } from '../lib/result.mjs';
 import { toJUnitXml, toSarif } from '../lib/export.mjs';
+import { toHtml } from '../lib/export.mjs';
 
 test('toJUnitXml aggregates totals and emits a failure testcase per digest entry', () => {
   const results = [
@@ -48,4 +49,25 @@ test('toSarif emits an error result for an errored app', () => {
   const s = toSarif([makeResult({ stack: 'frappe', errored: true, error: 'no junit' })]);
   assert.equal(s.runs[0].results.length, 1);
   assert.match(s.runs[0].results[0].message.text, /no junit/);
+});
+
+test('toHtml is a self-contained page listing apps and failures, escaped', () => {
+  const results = [
+    makeResult({ stack: 'flutter', label: 'a', passed: 2, failed: 1, durationMs: 1000,
+      failures: [{ test: 'adds <x>', file: null, line: null, message: 'Expected 2 & got 3' }] }),
+    makeResult({ stack: 'electron', label: 'd', passed: 3, failed: 0 }),
+  ];
+  const html = toHtml(results);
+  assert.match(html, /^<!doctype html>/i);
+  assert.match(html, /flutter \(a\)/);
+  assert.match(html, /electron \(d\)/);
+  assert.match(html, /adds &lt;x&gt;/);            // test name escaped
+  assert.match(html, /Expected 2 &amp; got 3/);    // message escaped
+  assert.match(html, /<\/html>\s*$/);
+});
+
+test('toHtml green-only run has no failure rows', () => {
+  const html = toHtml([makeResult({ stack: 'flutter', label: 'a', passed: 5, failed: 0 })]);
+  assert.match(html, /^<!doctype html>/i);
+  assert.equal(/<pre/.test(html), false);          // no failure <pre> blocks
 });
