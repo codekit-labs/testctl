@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
 import { mapPool } from '../lib/pool.mjs';
@@ -17,6 +17,7 @@ import { runFlutter } from '../lib/runners/flutter.mjs';
 import { runElectron } from '../lib/runners/electron.mjs';
 import { runNextjs } from '../lib/runners/nextjs.mjs';
 import { runSupabase } from '../lib/runners/supabase.mjs';
+import { hashApp, appCacheKey, decideCached, loadCache, saveCache } from '../lib/cache.mjs';
 
 const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase'];
 
@@ -61,11 +62,12 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
   if (minCoverage != null) coverage = true;
+  const useCache = cache || config.cache === true;
   let targets = discoverTargets(projectDir, config, only);
 
   if (changed) {
@@ -82,26 +84,58 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     }
   }
 
+  const cacheStore = useCache ? loadCache(projectDir) : {};
+  const hashByKey = {};
+  const decisions = targets.map((t) => {
+    if (useCache && t.path && !t.notice) {
+      const h = hashApp(resolve(projectDir, t.path));
+      hashByKey[appCacheKey(t)] = h;
+      if (decideCached(cacheStore[appCacheKey(t)], h)) return { t, cached: true };
+    }
+    return { t, cached: false };
+  });
+
   if (!quiet) {
     if (targets.length === 0) {
       console.log('No testable apps found.');
     } else {
       console.log('Discovered apps:');
-      for (const t of targets) {
+      for (const d of decisions) {
+        const t = d.t;
         const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
-        console.log(`  ${t.notice ? '⚠' : '•'} ${name}${t.notice ? ' — ' + t.note : ''}`);
+        const marker = d.cached ? '✓' : t.notice ? '⚠' : '•';
+        const suffix = d.cached ? ' cached' : t.notice ? ' — ' + t.note : '';
+        console.log(`  ${marker} ${name}${suffix}`);
       }
     }
-    const runnable = targets.filter((t) => !t.notice).length;
+    const runnable = decisions.filter((d) => !d.cached && !d.t.notice).length;
     if (runnable > 0) console.log(`\n▶ Running ${runnable} app(s) (concurrency ${concurrency})...`);
   }
-  const results = await mapPool(targets, concurrency, async (t) => {
+
+  const toRun = decisions.filter((d) => !d.cached).map((d) => d.t);
+  const ran = await mapPool(toRun, concurrency, async (t) => {
     try {
       return await runTarget(t, coverage);
     } catch (e) {
       return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
     }
   });
+
+  let ri = 0;
+  const results = decisions.map((d) =>
+    d.cached
+      ? makeResult({ stack: d.t.stack, label: d.t.label, present: true, note: 'unchanged since last green', cached: true })
+      : ran[ri++],
+  );
+
+  if (useCache) {
+    decisions.forEach((d, i) => {
+      if (d.cached || !d.t.path || d.t.notice) return;
+      const key = appCacheKey(d.t);
+      cacheStore[key] = { hash: hashByKey[key] ?? null, ok: results[i].ok };
+    });
+    saveCache(projectDir, cacheStore);
+  }
 
   applyCoverageGate(results, minCoverage);
   if (!quiet) console.log('\n' + formatReport(results));
@@ -159,9 +193,10 @@ async function main() {
     const changed = changedEntry
       ? { ref: changedEntry.startsWith('--changed=') ? changedEntry.split('=')[1] || null : null }
       : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet));
+    const cache = rest.includes('--cache');
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
