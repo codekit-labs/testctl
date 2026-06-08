@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.15.0] - 2026-06-07
+
+### Added
+- Failure digest: every result now carries a compact `failures[]` (test name, file/line, trimmed
+  message) in `TESTCTL_JSON`, extracted from each runner's own output (jest, flutter, JUnit, TAP,
+  HTTP checks). Messages are trimmed (~800 chars) and capped (20 per app). `/testctl:fix-failures`
+  reads this digest instead of reopening full logs — fewer tokens, faster diagnosis. The human
+  report table is unchanged.
+
 ## [1.14.0] - 2026-06-07
 
 ### Added

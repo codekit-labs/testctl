@@ -113,6 +113,12 @@ testctl report
 It shows total runs, per-app pass-rate, flaky apps (ones that flip pass↔fail), and the last run.
 History stays local and is never committed or uploaded.
 
+## Failure digest
+
+When tests fail, the machine-readable `TESTCTL_JSON` line includes a `failures[]` digest per app —
+the failing test name, file/line, and a trimmed message — so tools (and `/testctl:fix-failures`)
+can diagnose without parsing raw logs. Messages are trimmed and capped to stay small.
+
 ## Coverage
 
 Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):
