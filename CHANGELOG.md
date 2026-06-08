@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.23.0] - 2026-06-08
+
+### Added
+- `testctl run --report-html[=path]` writes a single self-contained HTML results page (per-app
+  pass/fail/coverage + a failures section) — shareable, no external assets. Bare flag →
+  `testctl-report.html`. Best-effort; never changes the exit code.
+
 ## [1.22.0] - 2026-06-08
 
 ### Added

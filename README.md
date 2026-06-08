@@ -159,6 +159,9 @@ To scaffold a ready-to-use GitHub Actions workflow, run `testctl init --ci` — 
 `.github/workflows/testctl.yml` (fetch engine → run → upload JUnit). Add a Flutter setup step
 (`subosito/flutter-action`) if you test Flutter in CI.
 
+For a shareable human-friendly page, add `--report-html=report.html` — a standalone results page
+(no external assets).
+
 ## Retry flaky tests
 
 ```bash
