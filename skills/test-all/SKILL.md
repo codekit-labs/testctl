@@ -28,8 +28,8 @@ from there. Run it with `node`. No `npm install` is required.
 
 2. Run the bundled engine from the project root (the directory you want tested), resolving the
    path from this skill's base directory:
-   - All stacks:    `node "<skill-base>/../../dist/testctl.cjs" run`
-   - Single stack:  `node "<skill-base>/../../dist/testctl.cjs" run <stack>`
+   - All stacks:    `node "<skill-base>/../../dist/testctl.cjs" run --quiet`
+   - Single stack:  `node "<skill-base>/../../dist/testctl.cjs" run --quiet <stack>`
 
 3. Read the final `TESTCTL_JSON {...}` line of the output. It has `results` and `failedLogs`
    (each with `stack`, `rawLogPath`, `error`).

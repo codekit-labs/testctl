@@ -17,10 +17,11 @@ project.
 ## Steps
 
 1. **Find real failures.** Run the engine:
-   `node "<skill-base>/../../dist/testctl.cjs" run` (scoped to the arg if given) and read the
-   `TESTCTL_JSON` line. Take the `results[]` entries with `failed > 0` — IGNORE "needs config"
+   `node "<skill-base>/../../dist/testctl.cjs" run --quiet` (scoped to the arg if given) and read
+   the `TESTCTL_JSON` line. Take the `results[]` entries with `failed > 0` — IGNORE "needs config"
    notices and not-present stacks. Each such entry carries a `failures[]` digest
    (`{ test, file, line, message }` per failing test). If there are none, say "no failures" and stop.
+   To scope to just what you edited (fewer tokens), add `--changed` (or `--changed=<ref>`).
 
 2. **For each failure, ONE AT A TIME (never batch):**
    a. Read the failure's digest entry (`test`, `file`, `line`, `message`) from `failures[]` — that

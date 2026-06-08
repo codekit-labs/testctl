@@ -21,7 +21,7 @@ for review.
    capture `target = N` and turn coverage collection ON for all runs below. If no gate exists,
    skip every coverage step that follows — behave exactly as before.
 
-2. **Discover apps.** Run the engine: `node "<skill-base>/../../dist/testctl.cjs" run`
+2. **Discover apps.** Run the engine: `node "<skill-base>/../../dist/testctl.cjs" run --quiet`
    (scoped to the arg if given; add `--coverage` when a gate exists) and read `TESTCTL_JSON`.
    Note each app, whether it has tests / is green, and its `coverage` (an integer % or null).
    Keep any "needs config" notices (Next.js without vercelUrl, Frappe without bench/site/apps)
