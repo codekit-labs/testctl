@@ -40,3 +40,11 @@ test('makeResult accepts an explicit label and note', () => {
   assert.equal(r.label, 'apps/pos');
   assert.equal(r.note, 'needs config');
 });
+
+test('makeResult defaults failures to [] and passes them through', () => {
+  const a = makeResult({ stack: 'flutter' });
+  assert.deepEqual(a.failures, []);
+  const b = makeResult({ stack: 'flutter', failed: 1, failures: [{ test: 't', file: null, line: null, message: 'boom' }] });
+  assert.equal(b.failures.length, 1);
+  assert.equal(b.failures[0].message, 'boom');
+});

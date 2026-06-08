@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ranButProducedNothing } from '../../lib/runners/shared.mjs';
+import { ranButProducedNothing, capFailures } from '../../lib/runners/shared.mjs';
 import { buildElectronArgv } from '../../lib/runners/electron.mjs';
 
 test('ranButProducedNothing flags non-zero exit with no tests', () => {
@@ -24,4 +24,20 @@ test('buildElectronArgv accepts a full argv array override', () => {
 });
 test('buildElectronArgv splits a string override', () => {
   assert.deepEqual(buildElectronArgv({ command: 'npx playwright test --reporter=json' }), ['npx', 'playwright', 'test', '--reporter=json']);
+});
+
+test('capFailures trims long messages', () => {
+  const out = capFailures([{ test: 't', file: null, line: null, message: 'x'.repeat(1000) }]);
+  assert.ok(out[0].message.length < 850);
+  assert.match(out[0].message, /\[truncated\]$/);
+});
+test('capFailures limits to 20 and appends a +N more marker', () => {
+  const many = Array.from({ length: 25 }, (_, i) => ({ test: `t${i}`, file: null, line: null, message: 'm' }));
+  const out = capFailures(many);
+  assert.equal(out.length, 21);
+  assert.match(out[20].test, /\+5 more/);
+});
+test('capFailures returns short lists unchanged', () => {
+  const inp = [{ test: 't', file: 'f', line: 1, message: 'm' }];
+  assert.deepEqual(capFailures(inp), inp);
 });
