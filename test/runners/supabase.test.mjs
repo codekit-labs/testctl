@@ -29,3 +29,12 @@ test('parseTap treats SKIP and TODO directives as skipped, not failed', () => {
   assert.equal(r.failed, 0);
   assert.equal(r.skipped, 2);
 });
+
+test('parseTap extracts not-ok failures with description', () => {
+  const tap = 'ok 1 - first\nnot ok 2 - second thing\n# expected 5 got 4\nok 3 - third\n';
+  const r = parseTap(tap);
+  assert.equal(r.failed, 1);
+  assert.equal(r.failures.length, 1);
+  assert.equal(r.failures[0].test, 'second thing');
+  assert.match(r.failures[0].message, /expected 5 got 4/);
+});
