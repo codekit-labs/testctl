@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
@@ -7,6 +7,7 @@ import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
+import { buildWorkflowYaml } from '../lib/ci.mjs';
 import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
@@ -23,21 +24,32 @@ import { hashApp, appCacheKey, decideCached, loadCache, saveCache } from '../lib
 
 const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase'];
 
-function cmdInit(projectDir) {
+function cmdInit(projectDir, { ci = false } = {}) {
   const path = join(projectDir, 'testctl.yaml');
   if (existsSync(path)) {
     console.log('testctl.yaml already exists — leaving it untouched.');
-    return 0;
+  } else {
+    const detection = scanProject(projectDir, homedir());
+    writeFileSync(path, buildInitYaml(detection));
+    const a = detection.auto;
+    console.log(`Created ${path}`);
+    console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
+    if (detection.frappe) {
+      console.log(`  frappe app: ${detection.frappe.apps.join(', ')} (bench: ${detection.frappe.benchPath || 'not found — set benchPath'})`);
+    }
+    console.log('  Fill any <FILL-ME> values, then run: testctl run');
   }
-  const detection = scanProject(projectDir, homedir());
-  writeFileSync(path, buildInitYaml(detection));
-  const a = detection.auto;
-  console.log(`Created ${path}`);
-  console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
-  if (detection.frappe) {
-    console.log(`  frappe app: ${detection.frappe.apps.join(', ')} (bench: ${detection.frappe.benchPath || 'not found — set benchPath'})`);
+  if (ci) {
+    const wfDir = join(projectDir, '.github', 'workflows');
+    const wfPath = join(wfDir, 'testctl.yml');
+    if (existsSync(wfPath)) {
+      console.log('.github/workflows/testctl.yml already exists — leaving it untouched.');
+    } else {
+      mkdirSync(wfDir, { recursive: true });
+      writeFileSync(wfPath, buildWorkflowYaml());
+      console.log(`Created ${wfPath}`);
+    }
   }
-  console.log('  Fill any <FILL-ME> values, then run: testctl run');
   return 0;
 }
 
@@ -200,7 +212,7 @@ function cmdDoctor() {
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
-  if (cmd === 'init') return process.exit(cmdInit(projectDir));
+  if (cmd === 'init') return process.exit(cmdInit(projectDir, { ci: process.argv.slice(3).includes('--ci') }));
   if (cmd === 'doctor') return process.exit(cmdDoctor());
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'run') {
@@ -231,7 +243,7 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
     return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report');
+  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
