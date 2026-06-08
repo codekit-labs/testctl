@@ -9833,6 +9833,32 @@ function scanProject(cwd, homeDir) {
   return { auto, frappe, nextjs };
 }
 
+// lib/ci.mjs
+function buildWorkflowYaml() {
+  return `name: tests
+on: [push, pull_request]
+jobs:
+  testctl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Fetch the dependency-free testctl engine (single bundled file).
+      - run: curl -fsSL https://raw.githubusercontent.com/codekit-labs/testctl/main/dist/testctl.cjs -o testctl.cjs
+      # Node-based stacks (Electron/Next.js/Supabase) work out of the box.
+      # For Flutter add: uses: subosito/flutter-action@v2
+      # For Frappe, run tests on a bench/CI service, not here.
+      - run: node testctl.cjs run --quiet --report-junit=testctl-junit.xml
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testctl-report
+          path: testctl-junit.xml
+`;
+}
+
 // lib/doctor.mjs
 var import_node_child_process = require("node:child_process");
 function parseMajor(versionString) {
@@ -10714,21 +10740,32 @@ function saveCache(projectDir, cache) {
 
 // bin/testctl.mjs
 var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase"];
-function cmdInit(projectDir) {
+function cmdInit(projectDir, { ci = false } = {}) {
   const path = (0, import_node_path13.join)(projectDir, "testctl.yaml");
   if ((0, import_node_fs12.existsSync)(path)) {
     console.log("testctl.yaml already exists \u2014 leaving it untouched.");
-    return 0;
+  } else {
+    const detection = scanProject(projectDir, (0, import_node_os6.homedir)());
+    (0, import_node_fs12.writeFileSync)(path, buildInitYaml(detection));
+    const a = detection.auto;
+    console.log(`Created ${path}`);
+    console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
+    if (detection.frappe) {
+      console.log(`  frappe app: ${detection.frappe.apps.join(", ")} (bench: ${detection.frappe.benchPath || "not found \u2014 set benchPath"})`);
+    }
+    console.log("  Fill any <FILL-ME> values, then run: testctl run");
   }
-  const detection = scanProject(projectDir, (0, import_node_os6.homedir)());
-  (0, import_node_fs12.writeFileSync)(path, buildInitYaml(detection));
-  const a = detection.auto;
-  console.log(`Created ${path}`);
-  console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
-  if (detection.frappe) {
-    console.log(`  frappe app: ${detection.frappe.apps.join(", ")} (bench: ${detection.frappe.benchPath || "not found \u2014 set benchPath"})`);
+  if (ci) {
+    const wfDir = (0, import_node_path13.join)(projectDir, ".github", "workflows");
+    const wfPath = (0, import_node_path13.join)(wfDir, "testctl.yml");
+    if ((0, import_node_fs12.existsSync)(wfPath)) {
+      console.log(".github/workflows/testctl.yml already exists \u2014 leaving it untouched.");
+    } else {
+      (0, import_node_fs12.mkdirSync)(wfDir, { recursive: true });
+      (0, import_node_fs12.writeFileSync)(wfPath, buildWorkflowYaml());
+      console.log(`Created ${wfPath}`);
+    }
   }
-  console.log("  Fill any <FILL-ME> values, then run: testctl run");
   return 0;
 }
 async function runTarget(target, coverage = false) {
@@ -10882,7 +10919,7 @@ function cmdDoctor() {
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
-  if (cmd === "init") return process.exit(cmdInit(projectDir));
+  if (cmd === "init") return process.exit(cmdInit(projectDir, { ci: process.argv.slice(3).includes("--ci") }));
   if (cmd === "doctor") return process.exit(cmdDoctor());
   if (cmd === "report") return process.exit(cmdReport(projectDir));
   if (cmd === "run") {
@@ -10911,7 +10948,7 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
     return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report");
+  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
