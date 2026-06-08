@@ -14,6 +14,7 @@ import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
 import { toJUnitXml, toSarif } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
+import { groupFailures, formatExplain } from '../lib/explain.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
@@ -188,6 +189,12 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     catch (e) { console.warn(`testctl: could not write sarif report: ${e.message}`); }
   }
   appendHistory(projectDir, historyEntry(results, new Date().toISOString()));
+  try {
+    const tdir = join(projectDir, '.testctl');
+    if (!existsSync(tdir)) mkdirSync(tdir, { recursive: true });
+    if (!existsSync(join(tdir, '.gitignore'))) writeFileSync(join(tdir, '.gitignore'), '*\n');
+    writeFileSync(join(tdir, 'last-run.json'), JSON.stringify({ ts: new Date().toISOString(), results }));
+  } catch { /* best-effort */ }
   return code;
 }
 
@@ -203,6 +210,18 @@ function cmdReport(projectDir) {
   return 0;
 }
 
+function cmdExplain(projectDir) {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(join(projectDir, '.testctl', 'last-run.json'), 'utf8'));
+  } catch {
+    console.log('No recent run — run `testctl run` first.');
+    return 0;
+  }
+  console.log(formatExplain(groupFailures(parsed.results || [])));
+  return 0;
+}
+
 function cmdDoctor() {
   const report = runDoctor();
   console.log(formatDoctor(report));
@@ -215,6 +234,7 @@ async function main() {
   if (cmd === 'init') return process.exit(cmdInit(projectDir, { ci: process.argv.slice(3).includes('--ci') }));
   if (cmd === 'doctor') return process.exit(cmdDoctor());
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
+  if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
   if (cmd === 'run') {
     const rest = process.argv.slice(3);
     const coverage = rest.includes('--coverage');
@@ -243,7 +263,7 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
     return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
   }
-  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report');
+  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report\n  testctl explain');
   return process.exit(cmd ? 2 : 0);
 }
 
