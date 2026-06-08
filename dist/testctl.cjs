@@ -9974,6 +9974,81 @@ function gitChangedFiles(projectDir, ref = null) {
   return { files: [...set], note: null };
 }
 
+// lib/export.mjs
+function xmlEscape(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+function suiteName(r) {
+  return r.label && r.label !== r.stack ? `${r.stack} (${r.label})` : r.stack;
+}
+function toJUnitXml(results) {
+  const present = results.filter((r) => r.present);
+  let T = 0, F = 0, E = 0, S = 0;
+  const suites = [];
+  for (const r of present) {
+    const name = suiteName(r);
+    const time = ((r.durationMs || 0) / 1e3).toFixed(3);
+    if (r.cached) {
+      S += 1;
+      suites.push(`  <testsuite name="${xmlEscape(name)}" tests="1" failures="0" errors="0" skipped="1">
+    <testcase name="cached" classname="${xmlEscape(name)}"><skipped/></testcase>
+  </testsuite>`);
+      continue;
+    }
+    if (r.errored) {
+      E += 1;
+      T += 1;
+      const msg = r.error || "errored";
+      suites.push(`  <testsuite name="${xmlEscape(name)}" tests="1" failures="0" errors="1" skipped="0" time="${time}">
+    <testcase name="${xmlEscape(name)}" classname="${xmlEscape(name)}"><error message="${xmlEscape(msg)}">${xmlEscape(msg)}</error></testcase>
+  </testsuite>`);
+      continue;
+    }
+    const tests = (r.passed || 0) + (r.failed || 0) + (r.skipped || 0);
+    T += tests;
+    F += r.failed || 0;
+    S += r.skipped || 0;
+    const cases = (r.failures || []).map((f) => {
+      const first = String(f.message || "").split("\n")[0].slice(0, 300);
+      return `    <testcase name="${xmlEscape(f.test)}" classname="${xmlEscape(name)}"><failure message="${xmlEscape(first)}">${xmlEscape(f.message)}</failure></testcase>`;
+    });
+    suites.push(`  <testsuite name="${xmlEscape(name)}" tests="${tests}" failures="${r.failed || 0}" errors="0" skipped="${r.skipped || 0}" time="${time}">${cases.length ? "\n" + cases.join("\n") + "\n  " : ""}</testsuite>`);
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="${T}" failures="${F}" errors="${E}" skipped="${S}">
+${suites.join("\n")}
+</testsuites>
+`;
+}
+function toSarif(results) {
+  const out = [];
+  for (const r of results.filter((x) => x.present)) {
+    const app = suiteName(r);
+    if (r.errored) {
+      out.push({ ruleId: r.stack, level: "error", message: { text: `${app}: ${r.error || "errored"}` } });
+      continue;
+    }
+    for (const f of r.failures || []) {
+      const res = { ruleId: r.stack, level: "error", message: { text: `${app}: ${f.test}
+${f.message}` } };
+      if (f.file) {
+        res.locations = [{
+          physicalLocation: {
+            artifactLocation: { uri: f.file },
+            ...f.line ? { region: { startLine: f.line } } : {}
+          }
+        }];
+      }
+      out.push(res);
+    }
+  }
+  return {
+    version: "2.1.0",
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+    runs: [{ tool: { driver: { name: "testctl", informationUri: "https://github.com/codekit-labs/testctl", rules: [] } }, results: out }]
+  };
+}
+
 // lib/coverage.mjs
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
 function parseLcov(text) {
@@ -10658,7 +10733,7 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
@@ -10732,6 +10807,20 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
 Exit code: ${code}`);
   const failedLogs = results.filter((r) => r.present && !r.ok).map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
   console.log("TESTCTL_JSON " + JSON.stringify({ results, failedLogs }));
+  if (junitPath) {
+    try {
+      (0, import_node_fs12.writeFileSync)((0, import_node_path13.resolve)(projectDir, junitPath), toJUnitXml(results));
+    } catch (e) {
+      console.warn(`testctl: could not write junit report: ${e.message}`);
+    }
+  }
+  if (sarifPath) {
+    try {
+      (0, import_node_fs12.writeFileSync)((0, import_node_path13.resolve)(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2));
+    } catch (e) {
+      console.warn(`testctl: could not write sarif report: ${e.message}`);
+    }
+  }
   appendHistory(projectDir, historyEntry(results, (/* @__PURE__ */ new Date()).toISOString()));
   return code;
 }
@@ -10775,9 +10864,13 @@ async function main() {
     const changedEntry = rest.find((a) => a === "--changed" || a.startsWith("--changed="));
     const changed = changedEntry ? { ref: changedEntry.startsWith("--changed=") ? changedEntry.split("=")[1] || null : null } : null;
     const cache = rest.includes("--cache");
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache));
+    const junitEntry = rest.find((a) => a === "--report-junit" || a.startsWith("--report-junit="));
+    const junitPath = junitEntry ? junitEntry.includes("=") ? junitEntry.split("=")[1] || "testctl-junit.xml" : "testctl-junit.xml" : null;
+    const sarifEntry = rest.find((a) => a === "--report-sarif" || a.startsWith("--report-sarif="));
+    const sarifPath = sarifEntry ? sarifEntry.includes("=") ? sarifEntry.split("=")[1] || "testctl-sarif.json" : "testctl-sarif.json" : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
