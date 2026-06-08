@@ -10078,6 +10078,53 @@ ${f.message}` } };
     runs: [{ tool: { driver: { name: "testctl", informationUri: "https://github.com/codekit-labs/testctl", rules: [] } }, results: out }]
   };
 }
+function toHtml(results) {
+  const present = (results || []).filter((r) => r.present);
+  const t = present.reduce((a, r) => ({
+    passed: a.passed + (r.passed || 0),
+    failed: a.failed + (r.failed || 0),
+    skipped: a.skipped + (r.skipped || 0)
+  }), { passed: 0, failed: 0, skipped: 0 });
+  const status = (r) => r.cached ? "\u2713 cached" : r.errored ? "\u2717 error" : r.flaky ? "\u2691 flaky" : r.failed > 0 ? "\u2717 fail" : "\u2713 pass";
+  const rows = present.map((r) => {
+    const n = xmlEscape(suiteName(r));
+    const cov = r.coverage != null ? r.coverage + "%" : "\u2014";
+    return `<tr><td>${n}</td><td>${r.passed || 0}</td><td>${r.failed || 0}</td><td>${r.skipped || 0}</td><td>${cov}</td><td>${status(r)}</td></tr>`;
+  }).join("\n");
+  const failBlocks = present.filter((r) => (r.failures || []).length).map((r) => {
+    const n = xmlEscape(suiteName(r));
+    const items = r.failures.map((f) => `<div class="f"><strong>${xmlEscape(f.test)}</strong><pre>${xmlEscape(f.message)}</pre></div>`).join("\n");
+    return `<section><h3>${n}</h3>${items}</section>`;
+  }).join("\n");
+  const failHtml = failBlocks ? `<h2>Failures</h2>${failBlocks}` : "";
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>testctl report</title>
+<style>
+  :root{--green:#14492e;--gold:#c9a227;--cream:#f7f3e8;--ink:#1c2620}
+  body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--cream);color:var(--ink)}
+  header{background:var(--green);color:var(--cream);padding:20px 24px}
+  header h1{margin:0 0 4px;font-size:20px}
+  .totals{color:var(--gold);font-weight:600}
+  main{padding:24px;max-width:900px}
+  table{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e7e1cf}
+  th{background:var(--green);color:var(--cream);font-weight:600}
+  h2{color:var(--green);border-bottom:2px solid var(--gold);padding-bottom:4px}
+  section h3{color:var(--green);margin:16px 0 4px}
+  .f pre{background:#2b2b2b;color:#eee;padding:10px;border-radius:4px;overflow:auto;white-space:pre-wrap}
+</style></head>
+<body>
+<header><h1>testctl report</h1><div class="totals">${present.length} app(s) \xB7 ${t.passed} passed \xB7 ${t.failed} failed \xB7 ${t.skipped} skipped</div></header>
+<main>
+<table><thead><tr><th>App</th><th>Passed</th><th>Failed</th><th>Skipped</th><th>Cov</th><th>Status</th></tr></thead>
+<tbody>
+${rows}
+</tbody></table>
+${failHtml}
+</main></body></html>
+`;
+}
 
 // lib/retry.mjs
 function shouldRetry(ok, retriesDone, maxRetries) {
@@ -10824,7 +10871,7 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -10931,6 +10978,13 @@ Exit code: ${code}`);
       console.warn(`testctl: could not write sarif report: ${e.message}`);
     }
   }
+  if (htmlPath) {
+    try {
+      (0, import_node_fs12.writeFileSync)((0, import_node_path13.resolve)(projectDir, htmlPath), toHtml(results));
+    } catch (e) {
+      console.warn(`testctl: could not write html report: ${e.message}`);
+    }
+  }
   appendHistory(projectDir, historyEntry(results, (/* @__PURE__ */ new Date()).toISOString()));
   try {
     const tdir = (0, import_node_path13.join)(projectDir, ".testctl");
@@ -10997,11 +11051,13 @@ async function main() {
     const junitPath = junitEntry ? junitEntry.includes("=") ? junitEntry.split("=")[1] || "testctl-junit.xml" : "testctl-junit.xml" : null;
     const sarifEntry = rest.find((a) => a === "--report-sarif" || a.startsWith("--report-sarif="));
     const sarifPath = sarifEntry ? sarifEntry.includes("=") ? sarifEntry.split("=")[1] || "testctl-sarif.json" : "testctl-sarif.json" : null;
+    const htmlEntry = rest.find((a) => a === "--report-html" || a.startsWith("--report-html="));
+    const htmlPath = htmlEntry ? htmlEntry.includes("=") ? htmlEntry.split("=")[1] || "testctl-report.html" : "testctl-report.html" : null;
     const retryEntry = rest.find((a) => a.startsWith("--retry="));
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath));
   }
-  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report\n  testctl explain");
+  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N]\n  testctl report\n  testctl explain");
   return process.exit(cmd ? 2 : 0);
 }
 main();
