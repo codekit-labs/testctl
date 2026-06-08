@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.20.0] - 2026-06-08
+
+### Added
+- Per-stack / per-app coverage gates: `coverageMin` in `testctl.yaml` may now be a map keyed by
+  stack and/or app label (e.g. `{ flutter: 80, electron: 60, "apps/pos": 90, default: 50 }`),
+  resolved label → stack → default per app. A plain number still works (global), and
+  `--min-coverage=N` still overrides everything as a global number.
+
 ## [1.19.0] - 2026-06-08
 
 ### Added

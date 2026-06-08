@@ -194,6 +194,18 @@ stacks:
   # ...
 ```
 
+`coverageMin` can also be a map for different bars per stack or app:
+
+```yaml
+coverageMin:
+  flutter: 80
+  electron: 60
+  "apps/pos": 90      # by app label
+  default: 50         # everything else
+```
+
+Resolution is label → stack → `default`. The `--min-coverage=N` flag still overrides everything.
+
 The command-line flag overrides the config value. An app whose measured coverage is below the
 threshold fails the run (exit 1) and shows the reason on its row
 (`⚠ coverage X% < min Y%`). Apps that don't report line coverage (Next.js, Supabase) are never
