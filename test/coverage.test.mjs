@@ -65,3 +65,29 @@ test('applyCoverageGate returns the same array reference', () => {
   const arr = [mk({ coverage: 5 })];
   assert.equal(applyCoverageGate(arr, 70), arr);
 });
+
+import { resolveThreshold } from '../lib/coverage.mjs';
+
+test('resolveThreshold: number applies globally', () => {
+  assert.equal(resolveThreshold({ stack: 'flutter', label: 'a' }, 70), 70);
+});
+test('resolveThreshold: map resolves label > stack > default', () => {
+  const m = { flutter: 80, 'apps/pos': 90, default: 50 };
+  assert.equal(resolveThreshold({ stack: 'flutter', label: 'apps/pos' }, m), 90);
+  assert.equal(resolveThreshold({ stack: 'flutter', label: 'apps/x' }, m), 80);
+  assert.equal(resolveThreshold({ stack: 'electron', label: 'd' }, m), 50);
+});
+test('resolveThreshold: null when no match and no default; null min', () => {
+  assert.equal(resolveThreshold({ stack: 'electron', label: 'd' }, { flutter: 80 }), null);
+  assert.equal(resolveThreshold({ stack: 'flutter', label: 'a' }, null), null);
+});
+test('applyCoverageGate with a map fails only apps under their resolved bar', () => {
+  const results = [
+    { stack: 'flutter', label: 'a', present: true, errored: false, ok: true, coverage: 70 },
+    { stack: 'electron', label: 'd', present: true, errored: false, ok: true, coverage: 70 },
+  ];
+  applyCoverageGate(results, { flutter: 80, default: 50 });
+  assert.equal(results[0].ok, false);                 // 70 < 80
+  assert.match(results[0].note, /< min 80%/);
+  assert.equal(results[1].ok, true);                  // 70 >= 50
+});
