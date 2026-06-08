@@ -10165,6 +10165,40 @@ function formatExplain(groups) {
   return lines.join("\n");
 }
 
+// lib/notify.mjs
+function appName(r) {
+  return r.label && r.label !== r.stack ? `${r.stack} (${r.label})` : r.stack;
+}
+function notifyText(results) {
+  const present = (results || []).filter((r) => r.present);
+  const bad = present.filter((r) => !r.ok);
+  const totals = present.reduce((a, r) => ({ p: a.p + (r.passed || 0), f: a.f + (r.failed || 0) }), { p: 0, f: 0 });
+  return `testctl: ${bad.length} app(s) red \xB7 ${totals.f} failed / ${totals.p} passed${bad.length ? " \u2014 " + bad.map(appName).join(", ") : ""}`;
+}
+function buildNotifyPayload(results, opts = {}) {
+  const present = (results || []).filter((r) => r.present);
+  const failed = present.filter((r) => !r.ok).map((r) => ({
+    app: appName(r),
+    failed: r.failed || 0,
+    errored: !!r.errored,
+    error: r.errored ? r.error || null : null
+  }));
+  const totals = present.reduce((a, r) => ({
+    passed: a.passed + (r.passed || 0),
+    failed: a.failed + (r.failed || 0),
+    skipped: a.skipped + (r.skipped || 0)
+  }), { passed: 0, failed: 0, skipped: 0 });
+  return { text: notifyText(results), project: opts.project || null, totals, failed };
+}
+async function postWebhook(url, payload) {
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    return { ok: res.ok, status: res.status };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // lib/coverage.mjs
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
 function parseLcov(text) {
@@ -10871,7 +10905,7 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -10962,6 +10996,12 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const code = computeExitCode(results);
   console.log(`
 Exit code: ${code}`);
+  if (notifyUrl && code !== 0) {
+    const payload = buildNotifyPayload(results, { project: projectDir.split("/").filter(Boolean).pop() || null });
+    console.log("TESTCTL_NOTIFY " + JSON.stringify(payload));
+    const res = await postWebhook(notifyUrl, payload);
+    if (!res.ok) console.warn(`testctl: notify failed: ${res.error || "status " + res.status}`);
+  }
   const failedLogs = results.filter((r) => r.present && !r.ok).map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
   console.log("TESTCTL_JSON " + JSON.stringify({ results, failedLogs }));
   if (junitPath) {
@@ -11055,9 +11095,11 @@ async function main() {
     const htmlPath = htmlEntry ? htmlEntry.includes("=") ? htmlEntry.split("=")[1] || "testctl-report.html" : "testctl-report.html" : null;
     const retryEntry = rest.find((a) => a.startsWith("--retry="));
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath));
+    const notifyEntry = rest.find((a) => a.startsWith("--notify="));
+    const notifyUrl = notifyEntry ? notifyEntry.split("=").slice(1).join("=") || null : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl));
   }
-  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N]\n  testctl report\n  testctl explain");
+  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url]\n  testctl report\n  testctl explain");
   return process.exit(cmd ? 2 : 0);
 }
 main();
