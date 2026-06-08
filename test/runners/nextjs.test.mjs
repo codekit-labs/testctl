@@ -35,3 +35,10 @@ test('evaluateCheck fails on a fetch error', () => {
   assert.equal(r.ok, false);
   assert.match(r.reason, /timeout after 15000ms/);
 });
+
+test('evaluateCheck reports a failing reason usable as a digest message', () => {
+  const r = evaluateCheck({ path: '/health', expectStatus: 200 }, { status: 500, body: '' });
+  assert.equal(r.ok, false);
+  assert.equal(r.path, '/health');
+  assert.match(r.reason, /expected status 200, got 500/);
+});
