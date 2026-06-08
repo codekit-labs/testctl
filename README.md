@@ -119,6 +119,18 @@ When tests fail, the machine-readable `TESTCTL_JSON` line includes a `failures[]
 the failing test name, file/line, and a trimmed message — so tools (and `/testctl:fix-failures`)
 can diagnose without parsing raw logs. Messages are trimmed and capped to stay small.
 
+## Run only what changed
+
+```bash
+testctl run --changed          # only apps with uncommitted/untracked edits
+testctl run --changed=main     # only what this branch changed vs main
+testctl run --quiet            # summary + machine JSON only (no table)
+```
+
+`--changed` scopes path-based apps (Flutter/Electron/Supabase) to the files you edited; Frappe and
+Next.js always run (their sources aren't locally path-mapped), and outside a git repo it runs
+everything. `--quiet` keeps output minimal — the skills use it to spend fewer tokens.
+
 ## Coverage
 
 Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):

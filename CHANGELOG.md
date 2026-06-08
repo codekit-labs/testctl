@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.16.0] - 2026-06-07
+
+### Added
+- `testctl run --changed[=<ref>]`: run only targets affected by your git changes (working tree +
+  staged + untracked, or vs a ref). Path-based stacks (Flutter/Electron/Supabase) are scoped to the
+  apps you touched; Frappe/Next.js always run (conservative); outside a git repo it fails open and
+  runs everything. Big token saver on monorepos.
+- `testctl run --quiet`: print only the one-line summary, `TESTCTL_JSON`, and the exit code (no
+  discovery list or results table). The bundled skills now run the engine with `--quiet`, so they
+  pull less into context — friendlier to small plans and prompt-cache reuse.
+
 ## [1.15.0] - 2026-06-07
 
 ### Added
