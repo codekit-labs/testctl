@@ -1,6 +1,6 @@
 {
   "name": "testctl",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel) and Supabase tests with one command and a unified report. Ships as a Claude Code plugin.",
   "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "claude-code", "plugin", "test-runner", "ci"],
   "license": "MIT",

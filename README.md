@@ -131,6 +131,17 @@ testctl run --quiet            # summary + machine JSON only (no table)
 Next.js always run (their sources aren't locally path-mapped), and outside a git repo it runs
 everything. `--quiet` keeps output minimal — the skills use it to spend fewer tokens.
 
+## Skip unchanged-and-green apps
+
+```bash
+testctl run --cache            # skip apps byte-identical to their last green run
+```
+
+testctl hashes each path-based app's source+tests; if it matches the last run where that app passed,
+it's reported `✓ cached` and not re-run (no tokens spent on it). Change any file and it re-runs; an
+app that was red last time always re-runs. State lives in `.testctl/cache.json` (git-ignored). You
+can also set `cache: true` in `testctl.yaml`. Frappe/Next.js are never cached.
+
 ## Coverage
 
 Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):

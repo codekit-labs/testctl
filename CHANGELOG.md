@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.17.0] - 2026-06-08
+
+### Added
+- `testctl run --cache` (or `cache: true` in `testctl.yaml`): skip a path-based app
+  (Flutter/Electron/Supabase) when its source+test files are byte-identical to the last run where it
+  passed — shown as `✓ cached`, with no test execution and no skill work. State-aware (unchanged-but-
+  red apps still re-run), git-independent, persisted in `.testctl/cache.json`. Frappe/Next.js always
+  run. Opt-in; without it, behavior is unchanged. Composes with `--changed`/`--quiet`.
+
 ## [1.16.0] - 2026-06-07
 
 ### Added
