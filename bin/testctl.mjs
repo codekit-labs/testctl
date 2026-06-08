@@ -15,6 +15,7 @@ import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
 import { toJUnitXml, toSarif, toHtml } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
+import { buildNotifyPayload, postWebhook } from '../lib/notify.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
@@ -77,7 +78,7 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -176,6 +177,13 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const code = computeExitCode(results);
   console.log(`\nExit code: ${code}`);
 
+  if (notifyUrl && code !== 0) {
+    const payload = buildNotifyPayload(results, { project: projectDir.split('/').filter(Boolean).pop() || null });
+    console.log('TESTCTL_NOTIFY ' + JSON.stringify(payload));
+    const res = await postWebhook(notifyUrl, payload);
+    if (!res.ok) console.warn(`testctl: notify failed: ${res.error || 'status ' + res.status}`);
+  }
+
   const failedLogs = results
     .filter((r) => r.present && !r.ok)
     .map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
@@ -267,9 +275,11 @@ async function main() {
     const htmlPath = htmlEntry ? (htmlEntry.includes('=') ? htmlEntry.split('=')[1] || 'testctl-report.html' : 'testctl-report.html') : null;
     const retryEntry = rest.find((a) => a.startsWith('--retry='));
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath));
+    const notifyEntry = rest.find((a) => a.startsWith('--notify='));
+    const notifyUrl = notifyEntry ? notifyEntry.split('=').slice(1).join('=') || null : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl));
   }
-  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N]\n  testctl report\n  testctl explain');
+  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url]\n  testctl report\n  testctl explain');
   return process.exit(cmd ? 2 : 0);
 }
 
