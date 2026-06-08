@@ -10084,6 +10084,40 @@ function shouldRetry(ok, retriesDone, maxRetries) {
   return !ok && retriesDone < maxRetries;
 }
 
+// lib/explain.mjs
+function normalizeSig(message) {
+  const first = String(message || "").split("\n").find((l) => l.trim()) || "";
+  return first.trim().replace(/\d+/g, "#").replace(/\s+/g, " ").slice(0, 120) || "(no message)";
+}
+function groupFailures(results) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const r of (results || []).filter((x) => x.present)) {
+    const app = r.label && r.label !== r.stack ? `${r.stack} (${r.label})` : r.stack;
+    for (const f of r.failures || []) {
+      const sig = normalizeSig(f.message);
+      const g = groups.get(sig) || { signature: sig, count: 0, apps: /* @__PURE__ */ new Set(), sample: { test: f.test, app, message: f.message } };
+      g.count += 1;
+      g.apps.add(app);
+      groups.set(sig, g);
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g, apps: [...g.apps] })).sort((a, b) => b.count - a.count);
+}
+function formatExplain(groups) {
+  if (!groups.length) return "No failures in the last run. \u{1F389}";
+  const total = groups.reduce((n, g) => n + g.count, 0);
+  const apps = new Set(groups.flatMap((g) => g.apps)).size;
+  const lines = [
+    `${total} failure${total === 1 ? "" : "s"} across ${apps} app${apps === 1 ? "" : "s"} \u2192 ${groups.length} group${groups.length === 1 ? "" : "s"}`,
+    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  ];
+  for (const g of groups) {
+    lines.push(`  \xD7${g.count}  ${g.signature}`);
+    lines.push(`        apps: ${g.apps.join(", ")}  \xB7  e.g. ${g.sample.test}`);
+  }
+  return lines.join("\n");
+}
+
 // lib/coverage.mjs
 var import_fast_xml_parser = __toESM(require_fxp(), 1);
 function parseLcov(text) {
@@ -10898,6 +10932,13 @@ Exit code: ${code}`);
     }
   }
   appendHistory(projectDir, historyEntry(results, (/* @__PURE__ */ new Date()).toISOString()));
+  try {
+    const tdir = (0, import_node_path13.join)(projectDir, ".testctl");
+    if (!(0, import_node_fs12.existsSync)(tdir)) (0, import_node_fs12.mkdirSync)(tdir, { recursive: true });
+    if (!(0, import_node_fs12.existsSync)((0, import_node_path13.join)(tdir, ".gitignore"))) (0, import_node_fs12.writeFileSync)((0, import_node_path13.join)(tdir, ".gitignore"), "*\n");
+    (0, import_node_fs12.writeFileSync)((0, import_node_path13.join)(tdir, "last-run.json"), JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), results }));
+  } catch {
+  }
   return code;
 }
 function cmdReport(projectDir) {
@@ -10911,6 +10952,17 @@ function cmdReport(projectDir) {
   console.log(formatHistoryReport(summarize(text)));
   return 0;
 }
+function cmdExplain(projectDir) {
+  let parsed;
+  try {
+    parsed = JSON.parse((0, import_node_fs12.readFileSync)((0, import_node_path13.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
+  } catch {
+    console.log("No recent run \u2014 run `testctl run` first.");
+    return 0;
+  }
+  console.log(formatExplain(groupFailures(parsed.results || [])));
+  return 0;
+}
 function cmdDoctor() {
   const report = runDoctor();
   console.log(formatDoctor(report));
@@ -10922,6 +10974,7 @@ async function main() {
   if (cmd === "init") return process.exit(cmdInit(projectDir, { ci: process.argv.slice(3).includes("--ci") }));
   if (cmd === "doctor") return process.exit(cmdDoctor());
   if (cmd === "report") return process.exit(cmdReport(projectDir));
+  if (cmd === "explain") return process.exit(cmdExplain(projectDir));
   if (cmd === "run") {
     const rest = process.argv.slice(3);
     const coverage = rest.includes("--coverage");
@@ -10948,7 +11001,7 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
     return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
   }
-  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report");
+  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report\n  testctl explain");
   return process.exit(cmd ? 2 : 0);
 }
 main();
