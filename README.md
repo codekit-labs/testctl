@@ -162,6 +162,16 @@ To scaffold a ready-to-use GitHub Actions workflow, run `testctl init --ci` — 
 For a shareable human-friendly page, add `--report-html=report.html` — a standalone results page
 (no external assets).
 
+## Notify on failure
+
+```bash
+testctl run --notify=https://hooks.example.com/...   # POST a summary when the run is red
+```
+
+On a red run, testctl POSTs `{ text, totals, failed[] }` to the URL (the `text` field renders in
+Slack/Discord-style webhooks) and logs it as a `TESTCTL_NOTIFY` line. Green runs send nothing; a
+failed POST warns but never changes the exit code.
+
 ## Retry flaky tests
 
 ```bash

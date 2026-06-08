@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.24.0] - 2026-06-08
+
+### Added
+- `testctl run --notify=<url>`: when a run goes red, POST a compact JSON failure summary
+  (`text` + `totals` + `failed[]`) to a webhook (Slack/Discord-style `text` renders directly). The
+  outbound payload is logged as a `TESTCTL_NOTIFY` line. Best-effort — a POST failure warns but
+  never changes the exit code; green runs send nothing.
+
 ## [1.23.0] - 2026-06-08
 
 ### Added
