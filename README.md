@@ -142,6 +142,19 @@ it's reported `✓ cached` and not re-run (no tokens spent on it). Change any fi
 app that was red last time always re-runs. State lives in `.testctl/cache.json` (git-ignored). You
 can also set `cache: true` in `testctl.yaml`. Frappe/Next.js are never cached.
 
+## CI reports (JUnit / SARIF)
+
+```bash
+testctl run --report-junit=report.xml     # JUnit XML — CI test summaries
+testctl run --report-sarif=report.sarif   # SARIF 2.1.0 — GitHub inline annotations
+```
+
+Both are written from the same results testctl already computes (counts + the failure digest), so
+they cost nothing extra. JUnit is understood natively by GitHub Actions, GitLab, and Jenkins; SARIF
+drives inline annotations on a GitHub PR's "Files changed" tab. Bare `--report-junit` /
+`--report-sarif` default to `testctl-junit.xml` / `testctl-sarif.json`. A write failure warns but
+never changes the exit code.
+
 ## Coverage
 
 Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):

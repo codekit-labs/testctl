@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.18.0] - 2026-06-08
+
+### Added
+- CI report export: `testctl run --report-junit[=path]` writes a JUnit XML report (rendered as a
+  test summary by GitHub Actions / GitLab / Jenkins) and `--report-sarif[=path]` writes SARIF 2.1.0
+  (inline PR annotations on GitHub). Built from the per-app counts + failure digest; best-effort
+  (a write error warns but never changes the exit code). Bare flags default to
+  `testctl-junit.xml` / `testctl-sarif.json`.
+
 ## [1.17.0] - 2026-06-08
 
 ### Added
