@@ -12,7 +12,7 @@ import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
-import { toJUnitXml, toSarif } from '../lib/export.mjs';
+import { toJUnitXml, toSarif, toHtml } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
@@ -77,7 +77,7 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -188,6 +188,10 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     try { writeFileSync(resolve(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2)); }
     catch (e) { console.warn(`testctl: could not write sarif report: ${e.message}`); }
   }
+  if (htmlPath) {
+    try { writeFileSync(resolve(projectDir, htmlPath), toHtml(results)); }
+    catch (e) { console.warn(`testctl: could not write html report: ${e.message}`); }
+  }
   appendHistory(projectDir, historyEntry(results, new Date().toISOString()));
   try {
     const tdir = join(projectDir, '.testctl');
@@ -259,11 +263,13 @@ async function main() {
     const junitPath = junitEntry ? (junitEntry.includes('=') ? junitEntry.split('=')[1] || 'testctl-junit.xml' : 'testctl-junit.xml') : null;
     const sarifEntry = rest.find((a) => a === '--report-sarif' || a.startsWith('--report-sarif='));
     const sarifPath = sarifEntry ? (sarifEntry.includes('=') ? sarifEntry.split('=')[1] || 'testctl-sarif.json' : 'testctl-sarif.json') : null;
+    const htmlEntry = rest.find((a) => a === '--report-html' || a.startsWith('--report-html='));
+    const htmlPath = htmlEntry ? (htmlEntry.includes('=') ? htmlEntry.split('=')[1] || 'testctl-report.html' : 'testctl-report.html') : null;
     const retryEntry = rest.find((a) => a.startsWith('--retry='));
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries));
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath));
   }
-  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--retry=N]\n  testctl report\n  testctl explain');
+  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N]\n  testctl report\n  testctl explain');
   return process.exit(cmd ? 2 : 0);
 }
 
