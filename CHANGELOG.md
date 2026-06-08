@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.19.0] - 2026-06-08
+
+### Added
+- `testctl run --retry=N` (or `retry: N` in `testctl.yaml`): re-run a failing or errored app up to N
+  times; if it passes on a retry it's reported flaky (`⚑ passed on retry K/N`) and counts as green
+  (exit 0) instead of failing the build, while still being surfaced. An app that fails all attempts
+  stays red (`failed after N retries`). Opt-in; composes with `--cache`/`--changed`/reports.
+
 ## [1.18.0] - 2026-06-08
 
 ### Added

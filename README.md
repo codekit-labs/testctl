@@ -155,6 +155,17 @@ drives inline annotations on a GitHub PR's "Files changed" tab. Bare `--report-j
 `--report-sarif` default to `testctl-junit.xml` / `testctl-sarif.json`. A write failure warns but
 never changes the exit code.
 
+## Retry flaky tests
+
+```bash
+testctl run --retry=2     # re-run a failing app up to 2 times
+```
+
+If an app passes on a retry it's marked `⚑ flaky (passed on retry K/N)` and the run stays green
+(exit 0) — so a known-flaky suite (timing, network, DB-not-ready) doesn't break CI, while still
+being visible. An app that fails every attempt stays red. Set a default with `retry: N` in
+`testctl.yaml`. Retries only re-run *failing* apps, so green runs cost nothing extra.
+
 ## Coverage
 
 Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):
