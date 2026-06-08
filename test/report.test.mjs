@@ -89,3 +89,8 @@ test('formatReport omits the note marker when there is no note', () => {
   const out = formatReport(results);
   assert.equal(out.includes('⚠'), false);
 });
+
+test('formatReport renders a cached row with a check mark', () => {
+  const out = formatReport([makeResult({ stack: 'flutter', label: 'a', present: true, cached: true, note: 'unchanged since last green' })]);
+  assert.match(out, /✓ Flutter \(a\)\s+cached/);
+});

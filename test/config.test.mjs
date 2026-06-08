@@ -56,3 +56,12 @@ test('loadConfig omits coverageMin when absent', () => {
   const cfg = loadConfig(dir);
   assert.equal('coverageMin' in cfg, false);
 });
+
+test('loadConfig surfaces cache:true when present and omits it otherwise', () => {
+  const d1 = tmpProject();
+  writeFileSync(join(d1, 'testctl.yaml'), 'cache: true\nstacks:\n  flutter: {}\n');
+  assert.equal(loadConfig(d1).cache, true);
+  const d2 = tmpProject();
+  writeFileSync(join(d2, 'testctl.yaml'), 'stacks:\n  flutter: {}\n');
+  assert.equal('cache' in loadConfig(d2), false);
+});

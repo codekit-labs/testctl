@@ -48,3 +48,8 @@ test('makeResult defaults failures to [] and passes them through', () => {
   assert.equal(b.failures.length, 1);
   assert.equal(b.failures[0].message, 'boom');
 });
+
+test('makeResult defaults cached false and passes it through', () => {
+  assert.equal(makeResult({ stack: 'flutter' }).cached, false);
+  assert.equal(makeResult({ stack: 'flutter', cached: true }).cached, true);
+});
