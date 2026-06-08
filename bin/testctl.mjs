@@ -10,6 +10,7 @@ import { buildInitYaml, scanProject } from '../lib/init.mjs';
 import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
+import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
@@ -60,25 +61,40 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
   if (minCoverage != null) coverage = true;
-  const targets = discoverTargets(projectDir, config, only);
+  let targets = discoverTargets(projectDir, config, only);
 
-  if (targets.length === 0) {
-    console.log('No testable apps found.');
-  } else {
-    console.log('Discovered apps:');
-    for (const t of targets) {
-      const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
-      console.log(`  ${t.notice ? '⚠' : '•'} ${name}${t.notice ? ' — ' + t.note : ''}`);
+  if (changed) {
+    const { files, note } = gitChangedFiles(projectDir, changed.ref);
+    if (note) console.log(note);
+    if (files) {
+      targets = selectChangedTargets(targets, files, projectDir);
+      if (targets.length === 0) {
+        console.log('No changed apps to test.');
+        console.log('TESTCTL_JSON ' + JSON.stringify({ results: [], failedLogs: [] }));
+        console.log('Exit code: 0');
+        return 0;
+      }
     }
   }
 
-  const runnable = targets.filter((t) => !t.notice).length;
-  if (runnable > 0) console.log(`\n▶ Running ${runnable} app(s) (concurrency ${concurrency})...`);
+  if (!quiet) {
+    if (targets.length === 0) {
+      console.log('No testable apps found.');
+    } else {
+      console.log('Discovered apps:');
+      for (const t of targets) {
+        const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
+        console.log(`  ${t.notice ? '⚠' : '•'} ${name}${t.notice ? ' — ' + t.note : ''}`);
+      }
+    }
+    const runnable = targets.filter((t) => !t.notice).length;
+    if (runnable > 0) console.log(`\n▶ Running ${runnable} app(s) (concurrency ${concurrency})...`);
+  }
   const results = await mapPool(targets, concurrency, async (t) => {
     try {
       return await runTarget(t, coverage);
@@ -88,7 +104,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   });
 
   applyCoverageGate(results, minCoverage);
-  console.log('\n' + formatReport(results));
+  if (!quiet) console.log('\n' + formatReport(results));
   const code = computeExitCode(results);
   console.log(`\nExit code: ${code}`);
 
@@ -138,9 +154,14 @@ async function main() {
     const mcEntry = rest.find((a) => a.startsWith('--min-coverage='));
     const mc = mcEntry ? Number(mcEntry.split('=')[1]) : null;
     const minCoverage = mc != null && !Number.isNaN(mc) ? mc : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage));
+    const quiet = rest.includes('--quiet');
+    const changedEntry = rest.find((a) => a === '--changed' || a.startsWith('--changed='));
+    const changed = changedEntry
+      ? { ref: changedEntry.startsWith('--changed=') ? changedEntry.split('=')[1] || null : null }
+      : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
