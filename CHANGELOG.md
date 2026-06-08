@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.22.0] - 2026-06-08
+
+### Added
+- `testctl explain`: after a run, prints the failures grouped by a normalized signature — "N
+  failures across M apps → K groups" — so a shared root cause is fixed once instead of per-test.
+  Reads `.testctl/last-run.json` (written by every `run`); no re-run needed.
+
 ## [1.21.0] - 2026-06-08
 
 ### Added

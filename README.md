@@ -170,6 +170,16 @@ If an app passes on a retry it's marked `⚑ flaky (passed on retry K/N)` and th
 being visible. An app that fails every attempt stays red. Set a default with `retry: N` in
 `testctl.yaml`. Retries only re-run *failing* apps, so green runs cost nothing extra.
 
+## Explain failures
+
+```bash
+testctl run        # then:
+testctl explain    # groups the last run's failures by root-cause signature
+```
+
+`explain` clusters similar failures (numeric variants collapse together) and shows which apps each
+group spans — handy before `/testctl:fix-failures`, so a shared cause is fixed once.
+
 ## Coverage
 
 Add `--coverage` to collect line-coverage % (Flutter, Electron, Frappe; others show `—`):
