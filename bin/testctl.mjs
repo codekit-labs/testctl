@@ -11,6 +11,7 @@ import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
+import { toJUnitXml, toSarif } from '../lib/export.mjs';
 import { applyCoverageGate } from '../lib/coverage.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
@@ -62,7 +63,7 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
@@ -146,6 +147,14 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     .filter((r) => r.present && !r.ok)
     .map((r) => ({ stack: r.stack, label: r.label, rawLogPath: r.rawLogPath, error: r.error }));
   console.log('TESTCTL_JSON ' + JSON.stringify({ results, failedLogs }));
+  if (junitPath) {
+    try { writeFileSync(resolve(projectDir, junitPath), toJUnitXml(results)); }
+    catch (e) { console.warn(`testctl: could not write junit report: ${e.message}`); }
+  }
+  if (sarifPath) {
+    try { writeFileSync(resolve(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2)); }
+    catch (e) { console.warn(`testctl: could not write sarif report: ${e.message}`); }
+  }
   appendHistory(projectDir, historyEntry(results, new Date().toISOString()));
   return code;
 }
@@ -194,9 +203,13 @@ async function main() {
       ? { ref: changedEntry.startsWith('--changed=') ? changedEntry.split('=')[1] || null : null }
       : null;
     const cache = rest.includes('--cache');
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache));
+    const junitEntry = rest.find((a) => a === '--report-junit' || a.startsWith('--report-junit='));
+    const junitPath = junitEntry ? (junitEntry.includes('=') ? junitEntry.split('=')[1] || 'testctl-junit.xml' : 'testctl-junit.xml') : null;
+    const sarifEntry = rest.find((a) => a === '--report-sarif' || a.startsWith('--report-sarif='));
+    const sarifPath = sarifEntry ? (sarifEntry.includes('=') ? sarifEntry.split('=')[1] || 'testctl-sarif.json' : 'testctl-sarif.json') : null;
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath));
   }
-  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache]\n  testctl report');
+  console.log('Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]]\n  testctl report');
   return process.exit(cmd ? 2 : 0);
 }
 
