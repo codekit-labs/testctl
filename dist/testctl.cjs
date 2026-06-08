@@ -88,7 +88,7 @@ var require_visit = __commonJS({
     "use strict";
     var identity = require_identity();
     var BREAK = Symbol("break visit");
-    var SKIP = Symbol("skip children");
+    var SKIP2 = Symbol("skip children");
     var REMOVE = Symbol("remove node");
     function visit(node, visitor) {
       const visitor_ = initVisitor(visitor);
@@ -100,7 +100,7 @@ var require_visit = __commonJS({
         visit_(null, node, visitor_, Object.freeze([]));
     }
     visit.BREAK = BREAK;
-    visit.SKIP = SKIP;
+    visit.SKIP = SKIP2;
     visit.REMOVE = REMOVE;
     function visit_(key, node, visitor, path) {
       const ctrl = callVisitor(key, node, visitor, path);
@@ -148,7 +148,7 @@ var require_visit = __commonJS({
         await visitAsync_(null, node, visitor_, Object.freeze([]));
     }
     visitAsync.BREAK = BREAK;
-    visitAsync.SKIP = SKIP;
+    visitAsync.SKIP = SKIP2;
     visitAsync.REMOVE = REMOVE;
     async function visitAsync_(key, node, visitor, path) {
       const ctrl = await callVisitor(key, node, visitor, path);
@@ -5550,7 +5550,7 @@ var require_cst_visit = __commonJS({
   "node_modules/yaml/dist/parse/cst-visit.js"(exports2) {
     "use strict";
     var BREAK = Symbol("break visit");
-    var SKIP = Symbol("skip children");
+    var SKIP2 = Symbol("skip children");
     var REMOVE = Symbol("remove item");
     function visit(cst, visitor) {
       if ("type" in cst && cst.type === "document")
@@ -5558,7 +5558,7 @@ var require_cst_visit = __commonJS({
       _visit(Object.freeze([]), cst, visitor);
     }
     visit.BREAK = BREAK;
-    visit.SKIP = SKIP;
+    visit.SKIP = SKIP2;
     visit.REMOVE = REMOVE;
     visit.itemAtPath = (cst, path) => {
       let item = cst;
@@ -9437,8 +9437,8 @@ var require_fxp = __commonJS({
 });
 
 // bin/testctl.mjs
-var import_node_fs11 = require("node:fs");
-var import_node_path12 = require("node:path");
+var import_node_fs12 = require("node:fs");
+var import_node_path13 = require("node:path");
 
 // lib/config.mjs
 var import_node_fs = require("node:fs");
@@ -9456,6 +9456,7 @@ function loadConfig(projectDir) {
   if (!parsed || typeof parsed !== "object") return { stacks: {} };
   const out = { stacks: parsed.stacks || {} };
   if (parsed.coverageMin != null) out.coverageMin = parsed.coverageMin;
+  if (parsed.cache != null) out.cache = parsed.cache;
   return out;
 }
 
@@ -9887,10 +9888,11 @@ function makeResult({
   label = null,
   note = null,
   coverage = null,
-  failures = []
+  failures = [],
+  cached = false
 }) {
   const ok = !errored && failed === 0;
-  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok, failures };
+  return { stack, label: label || stack, present, passed, failed, skipped, durationMs, rawLogPath, errored, error, note, coverage, ok, failures, cached };
 }
 
 // lib/report.mjs
@@ -9910,6 +9912,10 @@ function formatReport(results) {
   const lines = ["Test results", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"];
   for (const r of present) {
     const name = displayName(r);
+    if (r.cached) {
+      lines.push(`  \u2713 ${displayName(r)}  cached`);
+      continue;
+    }
     if (r.errored) {
       lines.push(`  \u2717 ${name}  ERROR: ${r.error}`);
       continue;
@@ -10015,12 +10021,12 @@ function applyCoverageGate(results, min) {
 // lib/spawn.mjs
 var import_node_child_process3 = require("node:child_process");
 function spawnAsync(command, args = [], opts = {}) {
-  return new Promise((resolve2) => {
+  return new Promise((resolve3) => {
     let child;
     try {
       child = (0, import_node_child_process3.spawn)(command, args, { cwd: opts.cwd, env: opts.env || process.env });
     } catch (error) {
-      resolve2({ status: null, stdout: "", stderr: "", error });
+      resolve3({ status: null, stdout: "", stderr: "", error });
       return;
     }
     let stdout = "";
@@ -10029,7 +10035,7 @@ function spawnAsync(command, args = [], opts = {}) {
     const done = (r) => {
       if (!settled) {
         settled = true;
-        resolve2(r);
+        resolve3(r);
       }
     };
     if (child.stdout) child.stdout.on("data", (d) => {
@@ -10535,16 +10541,92 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   });
 }
 
+// lib/cache.mjs
+var import_node_crypto = require("node:crypto");
+var import_node_fs11 = require("node:fs");
+var import_node_path12 = require("node:path");
+var SKIP = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  "build",
+  ".dart_tool",
+  "ios",
+  "android",
+  ".next",
+  "dist",
+  "out",
+  "Pods",
+  "vendor",
+  ".venv",
+  "__pycache__",
+  "coverage",
+  ".testctl"
+]);
+function walkFiles(dir, acc) {
+  let entries;
+  try {
+    entries = (0, import_node_fs11.readdirSync)(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith(".") || SKIP.has(e.name)) continue;
+    const full = (0, import_node_path12.join)(dir, e.name);
+    if (e.isDirectory()) walkFiles(full, acc);
+    else if (e.isFile()) acc.push(full);
+  }
+}
+function hashApp(absPath) {
+  if (!(0, import_node_fs11.existsSync)(absPath)) return null;
+  const files = [];
+  walkFiles(absPath, files);
+  files.sort();
+  const h = (0, import_node_crypto.createHash)("sha1");
+  for (const f of files) {
+    try {
+      h.update((0, import_node_path12.relative)(absPath, f));
+      h.update("\0");
+      h.update((0, import_node_fs11.readFileSync)(f));
+      h.update("\0");
+    } catch {
+    }
+  }
+  return h.digest("hex");
+}
+function appCacheKey(target) {
+  return `${target.stack}:${target.label || target.stack}`;
+}
+function decideCached(entry, currentHash) {
+  return !!(entry && currentHash && entry.hash === currentHash && entry.ok);
+}
+function loadCache(projectDir) {
+  try {
+    return JSON.parse((0, import_node_fs11.readFileSync)((0, import_node_path12.join)(projectDir, ".testctl", "cache.json"), "utf8")) || {};
+  } catch {
+    return {};
+  }
+}
+function saveCache(projectDir, cache) {
+  try {
+    const tdir = (0, import_node_path12.join)(projectDir, ".testctl");
+    if (!(0, import_node_fs11.existsSync)(tdir)) (0, import_node_fs11.mkdirSync)(tdir, { recursive: true });
+    const gi = (0, import_node_path12.join)(tdir, ".gitignore");
+    if (!(0, import_node_fs11.existsSync)(gi)) (0, import_node_fs11.writeFileSync)(gi, "*\n");
+    (0, import_node_fs11.writeFileSync)((0, import_node_path12.join)(tdir, "cache.json"), JSON.stringify(cache));
+  } catch {
+  }
+}
+
 // bin/testctl.mjs
 var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase"];
 function cmdInit(projectDir) {
-  const path = (0, import_node_path12.join)(projectDir, "testctl.yaml");
-  if ((0, import_node_fs11.existsSync)(path)) {
+  const path = (0, import_node_path13.join)(projectDir, "testctl.yaml");
+  if ((0, import_node_fs12.existsSync)(path)) {
     console.log("testctl.yaml already exists \u2014 leaving it untouched.");
     return 0;
   }
   const detection = scanProject(projectDir, (0, import_node_os6.homedir)());
-  (0, import_node_fs11.writeFileSync)(path, buildInitYaml(detection));
+  (0, import_node_fs12.writeFileSync)(path, buildInitYaml(detection));
   const a = detection.auto;
   console.log(`Created ${path}`);
   console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
@@ -10576,11 +10658,12 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false) {
   const config = loadConfig(projectDir);
   if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
   if (Number.isNaN(minCoverage)) minCoverage = null;
   if (minCoverage != null) coverage = true;
+  const useCache = cache || config.cache === true;
   let targets = discoverTargets(projectDir, config, only);
   if (changed) {
     const { files, note } = gitChangedFiles(projectDir, changed.ref);
@@ -10595,27 +10678,53 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
       }
     }
   }
+  const cacheStore = useCache ? loadCache(projectDir) : {};
+  const hashByKey = {};
+  const decisions = targets.map((t) => {
+    if (useCache && t.path && !t.notice) {
+      const h = hashApp((0, import_node_path13.resolve)(projectDir, t.path));
+      hashByKey[appCacheKey(t)] = h;
+      if (decideCached(cacheStore[appCacheKey(t)], h)) return { t, cached: true };
+    }
+    return { t, cached: false };
+  });
   if (!quiet) {
     if (targets.length === 0) {
       console.log("No testable apps found.");
     } else {
       console.log("Discovered apps:");
-      for (const t of targets) {
+      for (const d of decisions) {
+        const t = d.t;
         const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
-        console.log(`  ${t.notice ? "\u26A0" : "\u2022"} ${name}${t.notice ? " \u2014 " + t.note : ""}`);
+        const marker = d.cached ? "\u2713" : t.notice ? "\u26A0" : "\u2022";
+        const suffix = d.cached ? " cached" : t.notice ? " \u2014 " + t.note : "";
+        console.log(`  ${marker} ${name}${suffix}`);
       }
     }
-    const runnable = targets.filter((t) => !t.notice).length;
+    const runnable = decisions.filter((d) => !d.cached && !d.t.notice).length;
     if (runnable > 0) console.log(`
 \u25B6 Running ${runnable} app(s) (concurrency ${concurrency})...`);
   }
-  const results = await mapPool(targets, concurrency, async (t) => {
+  const toRun = decisions.filter((d) => !d.cached).map((d) => d.t);
+  const ran = await mapPool(toRun, concurrency, async (t) => {
     try {
       return await runTarget(t, coverage);
     } catch (e) {
       return makeResult({ stack: t.stack, label: t.label, errored: true, error: String(e) });
     }
   });
+  let ri = 0;
+  const results = decisions.map(
+    (d) => d.cached ? makeResult({ stack: d.t.stack, label: d.t.label, present: true, note: "unchanged since last green", cached: true }) : ran[ri++]
+  );
+  if (useCache) {
+    decisions.forEach((d, i) => {
+      if (d.cached || !d.t.path || d.t.notice) return;
+      const key = appCacheKey(d.t);
+      cacheStore[key] = { hash: hashByKey[key] ?? null, ok: results[i].ok };
+    });
+    saveCache(projectDir, cacheStore);
+  }
   applyCoverageGate(results, minCoverage);
   if (!quiet) console.log("\n" + formatReport(results));
   const code = computeExitCode(results);
@@ -10627,10 +10736,10 @@ Exit code: ${code}`);
   return code;
 }
 function cmdReport(projectDir) {
-  const path = (0, import_node_path12.join)(projectDir, ".testctl", "history.jsonl");
+  const path = (0, import_node_path13.join)(projectDir, ".testctl", "history.jsonl");
   let text = "";
   try {
-    text = (0, import_node_fs11.readFileSync)(path, "utf8");
+    text = (0, import_node_fs12.readFileSync)(path, "utf8");
   } catch {
     text = "";
   }
@@ -10665,9 +10774,10 @@ async function main() {
     const quiet = rest.includes("--quiet");
     const changedEntry = rest.find((a) => a === "--changed" || a.startsWith("--changed="));
     const changed = changedEntry ? { ref: changedEntry.startsWith("--changed=") ? changedEntry.split("=")[1] || null : null } : null;
-    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet));
+    const cache = rest.includes("--cache");
+    return process.exit(await cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache));
   }
-  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet]\n  testctl report");
+  console.log("Usage:\n  testctl init\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache]\n  testctl report");
   return process.exit(cmd ? 2 : 0);
 }
 main();
