@@ -131,6 +131,17 @@ testctl run --quiet            # summary + machine JSON only (no table)
 Next.js always run (their sources aren't locally path-mapped), and outside a git repo it runs
 everything. `--quiet` keeps output minimal — the skills use it to spend fewer tokens.
 
+## Watch mode
+
+```bash
+testctl run --watch                     # re-run on every save
+testctl run --watch --changed --cache   # fast local loop: only what changed, skip green
+```
+
+`--watch` runs once then re-runs on file changes (debounced; noise dirs ignored) until you press
+Ctrl-C. Combine with `--changed` and `--cache` for the tightest loop. (Recursive watching works on
+macOS/Windows; Linux support may be limited.)
+
 ## Skip unchanged-and-green apps
 
 ```bash

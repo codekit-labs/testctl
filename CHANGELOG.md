@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.25.0] - 2026-06-08
+
+### Added
+- `testctl run --watch`: run once, then re-run automatically on file changes (debounced; ignores
+  node_modules/.git/build/.testctl/etc.) until Ctrl-C. Pairs with `--changed`/`--cache` for a fast,
+  scoped local TDD loop. (Recursive watching is supported on macOS/Windows; on Linux it may be
+  limited.)
+
 ## [1.24.0] - 2026-06-08
 
 ### Added
