@@ -66,9 +66,10 @@ async function runTarget(target, coverage = false) {
 
 async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null) {
   const config = loadConfig(projectDir);
-  if (minCoverage == null && config.coverageMin != null) minCoverage = Number(config.coverageMin);
-  if (Number.isNaN(minCoverage)) minCoverage = null;
-  if (minCoverage != null) coverage = true;
+  let gate = minCoverage;
+  if (gate == null && config.coverageMin != null) gate = config.coverageMin;
+  if (typeof gate === 'number' && Number.isNaN(gate)) gate = null;
+  if (gate != null) coverage = true;
   const useCache = cache || config.cache === true;
   if (retries == null) retries = config.retry != null ? Number(config.retry) : 0;
   if (Number.isNaN(retries) || retries < 0) retries = 0;
@@ -157,7 +158,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     saveCache(projectDir, cacheStore);
   }
 
-  applyCoverageGate(results, minCoverage);
+  applyCoverageGate(results, gate);
   if (!quiet) console.log('\n' + formatReport(results));
   const code = computeExitCode(results);
   console.log(`\nExit code: ${code}`);
