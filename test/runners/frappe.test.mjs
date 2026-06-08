@@ -103,3 +103,15 @@ test('buildRemoteBenchCommand defaults to --app (back-compat)', () => {
     'cd /b && bench --site demo.site run-tests --app jms --junit-xml-output /tmp/x.xml',
   );
 });
+
+test('parseFrappeJUnit extracts failures from testcase failure/error nodes', () => {
+  const xml = `<?xml version="1.0"?><testsuites><testsuite tests="2" failures="1" errors="0" skipped="0">
+    <testcase classname="TestJob" name="test_ok"></testcase>
+    <testcase classname="TestJob" name="test_bad"><failure message="AssertionError: 1 != 2">Traceback: line 5</failure></testcase>
+  </testsuite></testsuites>`;
+  const r = parseFrappeJUnit(xml);
+  assert.equal(r.failed, 1);
+  assert.equal(r.failures.length, 1);
+  assert.equal(r.failures[0].test, 'TestJob.test_bad');
+  assert.match(r.failures[0].message, /AssertionError: 1 != 2/);
+});
