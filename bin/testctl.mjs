@@ -12,7 +12,7 @@ import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
 import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
-import { toJUnitXml, toSarif, toHtml } from '../lib/export.mjs';
+import { toJUnitXml, toSarif, toHtml, toMarkdown } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
 import { buildNotifyPayload, postWebhook } from '../lib/notify.mjs';
@@ -79,7 +79,7 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -201,6 +201,10 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     try { writeFileSync(resolve(projectDir, htmlPath), toHtml(results)); }
     catch (e) { console.warn(`testctl: could not write html report: ${e.message}`); }
   }
+  if (mdPath) {
+    try { writeFileSync(resolve(projectDir, mdPath), toMarkdown(results)); }
+    catch (e) { console.warn(`testctl: could not write markdown report: ${e.message}`); }
+  }
   appendHistory(projectDir, historyEntry(results, new Date().toISOString()));
   try {
     const tdir = join(projectDir, '.testctl');
@@ -289,16 +293,18 @@ async function main() {
     const sarifPath = sarifEntry ? (sarifEntry.includes('=') ? sarifEntry.split('=')[1] || 'testctl-sarif.json' : 'testctl-sarif.json') : null;
     const htmlEntry = rest.find((a) => a === '--report-html' || a.startsWith('--report-html='));
     const htmlPath = htmlEntry ? (htmlEntry.includes('=') ? htmlEntry.split('=')[1] || 'testctl-report.html' : 'testctl-report.html') : null;
+    const mdEntry = rest.find((a) => a === '--report-md' || a.startsWith('--report-md='));
+    const mdPath = mdEntry ? (mdEntry.includes('=') ? mdEntry.split('=')[1] || 'testctl-report.md' : 'testctl-report.md') : null;
     const retryEntry = rest.find((a) => a.startsWith('--retry='));
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
     const notifyEntry = rest.find((a) => a.startsWith('--notify='));
     const notifyUrl = notifyEntry ? notifyEntry.split('=').slice(1).join('=') || null : null;
     const watch = rest.includes('--watch');
-    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl);
+    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl, mdPath);
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain');
+  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain');
   return process.exit(cmd ? 2 : 0);
 }
 
