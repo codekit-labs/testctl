@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.32.0] - 2026-06-10
+
+### Added
+- Two more universal skills (markdown-only; each discovers the project's own config):
+  - **`/testctl:date-tz-guard`** — tests date/time correctness: no timezone off-by-one, DST
+    transitions, month/year/leap/fiscal boundaries, duration/age math, and date round-trips —
+    asserting with explicit timezones, never the host's. Works with Frappe `getdate`/`now_datetime`
+    + System Settings tz, JS date-fns/dayjs, and Flutter `DateTime`/`intl`.
+  - **`/testctl:api-contract`** — contract tests for the app's API: correct status codes, response
+    shape/required fields, the error envelope on bad input (Frappe `exc_type`/`_server_messages` or
+    the documented error body), auth-required rejection, and pagination shape. Covers Frappe
+    whitelisted methods, Next.js API routes, and REST controllers.
+
 ## [1.31.0] - 2026-06-10
 
 ### Added

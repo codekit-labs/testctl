@@ -129,9 +129,14 @@ And three more for the rest of the lifecycle:
 /testctl:money-guard           # money math: rounding, no float drift, totals reconcile, multi-currency
 ```
 
-`tax-guard`, `permissions-guard`, and `money-guard` are universal — each reads your project's own
-config (tax rates, auth/roles, currency precision) and asserts the invariants, so they protect the
-high-stakes areas (compliance, security, money) on any stack and in any country.
+```
+/testctl:date-tz-guard         # date/time: no tz off-by-one, DST, boundaries, duration math
+/testctl:api-contract          # API: status codes, response shape, error envelope, auth, pagination
+```
+
+These guards are universal — each reads your project's own config (tax rates, auth/roles, currency
+precision, timezone, API endpoints) and asserts the invariants, so they protect the high-stakes
+areas (compliance, security, money, dates, APIs) on any stack and in any country.
 
 ## Run history
 
