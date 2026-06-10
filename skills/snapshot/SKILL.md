@@ -30,8 +30,11 @@ report builders, API handlers, pure render functions) and confirm the list.
    - **Frappe/Supabase:** serialize the output to canonical JSON and compare against a committed
      golden file (write the golden on first run).
 
-3. **Normalize non-determinism BEFORE snapshotting** — strip/replace timestamps, ids, and sort
-   unordered collections — so the snapshot is stable and a real change (not noise) is what fails.
+3. **Normalize non-determinism AND redact PII BEFORE snapshotting** — strip/replace timestamps and
+   ids, sort unordered collections, and **mask any real personal data** (emails, phone numbers,
+   names, national/tax IDs) — especially when the data came from a restored production copy. A
+   committed snapshot must never contain real customer PII. The snapshot should be stable and
+   privacy-safe; a real change (not noise or a leak) is what fails it.
 
 4. **Generate the baseline from CURRENT output, then REVIEW it.** Snapshots capture whatever the
    code does today — so a snapshot of a buggy output would lock the bug in. After generating, show

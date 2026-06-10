@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.35.0] - 2026-06-10
+
+### Added
+- **`/testctl:mock-externals`** (skill) — finds outbound integrations (email, SMS, payment,
+  e-invoice/tax-authority, webhooks, third-party HTTP) and stubs them in tests, so the suite never
+  hits real services. Critical when testing against a restored production copy that still carries
+  live credentials. Asserts what *would* have been sent, never real delivery.
+- **PII redaction for the notify webhook** — the `--notify` payload (and its logged `TESTCTL_NOTIFY`
+  line) now mask emails and long digit runs (phones / cards / IBANs / IDs) before leaving the
+  machine, so failure summaries from prod-data runs don't leak customer data. The `snapshot` and
+  `test-audit` skills now also redact/flag PII (no real customer data in committed snapshots/fixtures).
+
 ## [1.34.0] - 2026-06-10
 
 ### Added

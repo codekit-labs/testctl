@@ -16,6 +16,7 @@ import { toJUnitXml, toSarif, toHtml, toMarkdown } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
 import { buildNotifyPayload, postWebhook } from '../lib/notify.mjs';
+import { redactNotifyPayload } from '../lib/redact.mjs';
 import { watchProject } from '../lib/watch.mjs';
 import { applyCoverageGate, resolveThreshold } from '../lib/coverage.mjs';
 import { langOf, isTestFile, extractSymbols, untestedSymbols } from '../lib/symbols.mjs';
@@ -189,7 +190,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   console.log(`\nExit code: ${code}`);
 
   if (notifyUrl && code !== 0) {
-    const payload = buildNotifyPayload(results, { project: projectDir.split('/').filter(Boolean).pop() || null });
+    const payload = redactNotifyPayload(buildNotifyPayload(results, { project: projectDir.split('/').filter(Boolean).pop() || null }));
     console.log('TESTCTL_NOTIFY ' + JSON.stringify(payload));
     const res = await postWebhook(notifyUrl, payload);
     if (!res.ok) console.warn(`testctl: notify failed: ${res.error || 'status ' + res.status}`);

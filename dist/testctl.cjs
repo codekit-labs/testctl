@@ -10271,6 +10271,20 @@ async function postWebhook(url, payload) {
   }
 }
 
+// lib/redact.mjs
+function redactPII(text) {
+  if (text == null) return text;
+  return String(text).replace(/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, "[email]").replace(/(?:\+?\d[\s-]?){9,}\d/g, "[number]");
+}
+function redactNotifyPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  return {
+    ...payload,
+    text: redactPII(payload.text),
+    failed: Array.isArray(payload.failed) ? payload.failed.map((f) => ({ ...f, error: f.error == null ? f.error : redactPII(f.error) })) : payload.failed
+  };
+}
+
 // lib/watch.mjs
 var import_node_fs7 = require("node:fs");
 var IGNORE = ["node_modules", ".git", "build", ".dart_tool", ".next", "dist", "out", "Pods", "vendor", ".venv", "__pycache__", "coverage", ".testctl"];
@@ -11188,7 +11202,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   console.log(`
 Exit code: ${code}`);
   if (notifyUrl && code !== 0) {
-    const payload = buildNotifyPayload(results, { project: projectDir.split("/").filter(Boolean).pop() || null });
+    const payload = redactNotifyPayload(buildNotifyPayload(results, { project: projectDir.split("/").filter(Boolean).pop() || null }));
     console.log("TESTCTL_NOTIFY " + JSON.stringify(payload));
     const res = await postWebhook(notifyUrl, payload);
     if (!res.ok) console.warn(`testctl: notify failed: ${res.error || "status " + res.status}`);

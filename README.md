@@ -135,7 +135,12 @@ And three more for the rest of the lifecycle:
 /testctl:test-this             # describe a case in plain English → get the runnable test
 /testctl:snapshot              # golden/snapshot tests for output-heavy code (no hand-written asserts)
 /testctl:scaffold              # zero-to-one: set up the test harness for an app that has none
+/testctl:mock-externals        # stub email/SMS/payment/webhooks/HTTP so tests never hit real services
 ```
+
+> **Testing on restored production data?** Run `/testctl:mock-externals` so tests can't fire real
+> emails/payments, and note that `--notify` payloads are PII-redacted (emails / phone & card numbers
+> masked) — keep real customer data out of snapshots and fixtures too.
 
 ```
 /testctl:date-tz-guard         # date/time: no tz off-by-one, DST, boundaries, duration math

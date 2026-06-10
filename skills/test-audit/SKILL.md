@@ -30,6 +30,10 @@ tests (confirm the list first).
    - **Hidden gaps** — `skip`/`xit`/`@skip`/`todo` left silently; commented-out assertions;
      try/catch that swallows the failure.
    - **No teardown** — created records/files/DB rows never cleaned up (esp. Frappe/Supabase).
+   - **Hits real services** — a test that sends real email/SMS/payment or calls a live third-party
+     URL (unmocked) — dangerous on restored prod data; flag for `mock-externals`.
+   - **Committed PII** — real customer data (emails, phones, names, tax IDs) hardcoded in fixtures
+     or snapshots; flag it for redaction.
 
 3. **Report** — a ranked summary: per app, the issues by severity (🔴 can't-catch-bugs / 🟡 brittle
    / 🟢 minor), each with file:line and a one-line "why it's a problem".
