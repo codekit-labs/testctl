@@ -101,6 +101,20 @@ leaving all changes uncommitted for you to review and commit.
 A quiet SessionStart hook also makes Claude aware of these commands so it can offer the right
 one when you're working on tests; it never runs anything automatically.
 
+## Sharpen existing tests
+
+Three skills go beyond "do they pass" to "are they any good":
+
+```
+/testctl:harden           # add edge cases (nulls, boundaries, error paths) to happy-path-only suites
+/testctl:coverage-boost   # write tests for the exact uncovered lines, to a target %
+/testctl:test-audit       # review tests for quality — find green-but-worthless suites, then fix safely
+```
+
+`harden` makes a suite meaner, `coverage-boost` targets the specific gaps from the coverage report,
+and `test-audit` catches tests that pass without asserting anything. All additive, never weaken a
+test, and leave changes uncommitted for review.
+
 ## Run history
 
 Every `run` is recorded to `.testctl/history.jsonl` in the project (the folder self-ignores via

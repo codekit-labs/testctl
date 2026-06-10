@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.27.0] - 2026-06-10
+
+### Added
+- Three new test-case skills (markdown-only; engine unchanged):
+  - **`/testctl:harden`** — adds adversarial edge-case tests (nulls, boundaries, error paths,
+    large/unicode input, domain edges) to apps that only have happy-path tests; additive, never
+    overwrites, reports any real bug it surfaces.
+  - **`/testctl:coverage-boost`** — reads the coverage report (lcov / jest-summary / cobertura) to
+    find the *specific* uncovered functions/branches and writes tests for exactly those, bounded to
+    3 rounds, reporting `coverage X% → Y%`.
+  - **`/testctl:test-audit`** — reviews existing tests for quality (assertions that don't assert,
+    can't-fail tautologies, over-mocking, brittle sleeps/selectors, order-dependence, missing
+    teardown, silently-skipped tests), reports them ranked by severity, and safely strengthens the
+    unambiguous ones — never weakening a test.
+
 ## [1.26.0] - 2026-06-10
 
 ### Added
