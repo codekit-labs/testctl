@@ -101,6 +101,12 @@ leaving all changes uncommitted for you to review and commit.
 A quiet SessionStart hook also makes Claude aware of these commands so it can offer the right
 one when you're working on tests; it never runs anything automatically.
 
+**Offer tests after coding:** when Claude edits source files in a turn, testctl offers to run the
+tests at the end of it — *"want me to run `testctl run --changed --quiet --cache`?"* — so you don't
+have to remember. It never runs anything on its own (you say yes/no), only fires on real source
+changes (not docs/tests), once per change-batch. Turn it off with `autoOffer: false` in
+`testctl.yaml`.
+
 ## Sharpen existing tests
 
 Three skills go beyond "do they pass" to "are they any good":

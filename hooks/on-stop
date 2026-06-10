@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Stop hook: when Claude finishes a turn in which SOURCE files changed, OFFER to run the
+# tests (it never runs them itself — it asks). Fires at most once per code-change batch
+# (the marker is consumed). Opt out with `autoOffer: false` in testctl.yaml.
+set -euo pipefail
+
+proj="${CLAUDE_PROJECT_DIR:-$PWD}"
+marker="$proj/.testctl/.pending-tests"
+[ -f "$marker" ] || exit 0
+rm -f "$marker" 2>/dev/null || true
+
+# Opt-out + loop guard.
+if [ -f "$proj/testctl.yaml" ] && grep -qE 'autoOffer:[[:space:]]*false' "$proj/testctl.yaml"; then exit 0; fi
+if [ "${stop_hook_active:-}" = "true" ]; then exit 0; fi
+
+MSG="You changed source files this turn. In ONE short sentence, OFFER to run the project's tests with testctl — suggest 'testctl run --changed --quiet --cache' (only what changed, skipping already-green apps) and, if anything comes back red, /testctl:fix-failures. Ask the user yes/no; do NOT run anything yourself. If tests were already run this turn or the user declined, skip the offer."
+
+# Minimal JSON escaping (MSG has no quotes/newlines/backslashes).
+printf '{"decision":"block","reason":"%s"}\n' "$MSG"
+exit 0

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# PostToolUse hook (Edit|Write|MultiEdit): if a SOURCE file was changed, drop a quiet
+# marker so the Stop hook can offer to run the tests. Best-effort; never blocks, never
+# prints to the transcript. Adds nothing to Claude's context.
+set -euo pipefail
+
+input="$(cat 2>/dev/null || true)"
+
+# Pull the edited file path out of the tool input JSON (crude but dependency-free).
+fp="$(printf '%s' "$input" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')"
+[ -n "$fp" ] || exit 0
+
+# Only source code — skip docs, config, and the tests themselves.
+case "$fp" in
+  *test*|*spec*|*.md|*.json|*.yaml|*.yml|*.lock|*.txt) exit 0 ;;
+esac
+case "$fp" in
+  *.py|*.dart|*.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.vue|*.svelte|*.go|*.rs|*.java|*.kt|*.rb|*.php) ;;
+  *) exit 0 ;;
+esac
+
+proj="${CLAUDE_PROJECT_DIR:-$PWD}"
+dir="$proj/.testctl"
+mkdir -p "$dir" 2>/dev/null || exit 0
+[ -f "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore" 2>/dev/null || true
+touch "$dir/.pending-tests" 2>/dev/null || true
+exit 0

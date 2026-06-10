@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.36.0] - 2026-06-10
+
+### Added
+- Offer-tests-after-coding: when Claude edits source files in a turn, testctl now **offers** to run
+  the tests at the end of that turn — "want me to run `testctl run --changed --quiet --cache`?" — so
+  you don't have to remember. It never runs anything itself (you say yes/no), only triggers on real
+  source changes (not docs/config/tests), fires once per change-batch, and is opt-out via
+  `autoOffer: false` in `testctl.yaml`. Implemented as a quiet PostToolUse marker + a Stop hook;
+  zero added context tokens.
+
 ## [1.35.0] - 2026-06-10
 
 ### Added
