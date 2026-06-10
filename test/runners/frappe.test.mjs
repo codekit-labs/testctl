@@ -104,6 +104,28 @@ test('buildRemoteBenchCommand defaults to --app (back-compat)', () => {
   );
 });
 
+import { classifyFrappeFailure } from '../../lib/runners/frappe.mjs';
+
+test('classifyFrappeFailure: dev-requirements gate → actionable, accurate message (not allow_tests)', () => {
+  const out = 'Development dependencies are required to execute this command. To install run:\n$ bench setup requirements --dev';
+  const msg = classifyFrappeFailure(out);
+  assert.match(msg, /dev requirements/i);
+  assert.match(msg, /bench setup requirements --dev/);
+  assert.doesNotMatch(msg, /allow_tests/i);
+});
+
+test('classifyFrappeFailure: missing site → site-not-found hint', () => {
+  const msg = classifyFrappeFailure('Site avientekv21.local does not exist');
+  assert.match(msg, /site/i);
+  assert.match(msg, /does not exist|not found/i);
+});
+
+test('classifyFrappeFailure: unrecognised output → null (caller uses generic fallback)', () => {
+  assert.equal(classifyFrappeFailure('some unrelated traceback'), null);
+  assert.equal(classifyFrappeFailure(''), null);
+  assert.equal(classifyFrappeFailure(null), null);
+});
+
 test('parseFrappeJUnit extracts failures from testcase failure/error nodes', () => {
   const xml = `<?xml version="1.0"?><testsuites><testsuite tests="2" failures="1" errors="0" skipped="0">
     <testcase classname="TestJob" name="test_ok"></testcase>

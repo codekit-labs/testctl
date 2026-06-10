@@ -10543,6 +10543,17 @@ ${typeof x === "string" ? x : x["#text"] || ""}`.trim());
   }
   return { passed, failed, skipped, failures: failures2 };
 }
+function classifyFrappeFailure(output) {
+  const text = String(output || "");
+  if (!text) return null;
+  if (/Development dependencies are required|bench setup requirements --dev/i.test(text)) {
+    return "bench is missing dev requirements (xmlrunner etc.) \u2014 run 'bench setup requirements --dev' on the bench; this is one-time bench setup, not a test failure";
+  }
+  if (/Site\s+\S+\s+does not exist/i.test(text)) {
+    return "site not found \u2014 check `site` in testctl.yaml matches a real bench site";
+  }
+  return null;
+}
 function buildSshArgs(ssh, remoteCommand) {
   const args = ["-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10"];
   if (ssh.key) args.push("-i", ssh.key);
@@ -10593,6 +10604,7 @@ async function runFrappe(cfg) {
   const units = Array.isArray(cfg.modules) && cfg.modules.length ? cfg.modules.map((m) => ({ kind: "module", value: m })) : apps.map((a) => ({ kind: "app", value: a }));
   for (const unit of units) {
     let xmlText = null;
+    let unitOut = "";
     if (remote) {
       const remoteXml = `/tmp/testctl-${safeName(unit.value)}.xml`;
       const run = await runSsh(cfg.ssh, buildRemoteBenchCommand(benchPath, site, unit.value, remoteXml, unit.kind));
@@ -10600,6 +10612,7 @@ async function runFrappe(cfg) {
         appErrors.push(`${unit.value}: ${run.error}`);
         continue;
       }
+      unitOut = `${run.proc.stdout || ""}${run.proc.stderr || ""}`;
       logBuf += `
 $ ssh ${cfg.ssh.host} (bench run-tests --${unit.kind} ${unit.value})
 ${run.proc.stdout || ""}${run.proc.stderr || ""}`;
@@ -10617,6 +10630,7 @@ ${run.proc.stdout || ""}${run.proc.stderr || ""}`;
       const xmlPath = (0, import_node_path8.join)(logDir, `${safeName(unit.value)}.xml`);
       const args = buildLocalBenchArgs({ site, kind: unit.kind, value: unit.value, xmlPath, coverage: cfg.coverage });
       const proc = await spawnAsync("bench", args, { cwd: benchPath });
+      unitOut = `${proc.stdout || ""}${proc.stderr || ""}`;
       logBuf += `
 $ bench ${args.join(" ")}
 ${proc.stdout || ""}${proc.stderr || ""}`;
@@ -10633,7 +10647,8 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
       totals.skipped += r.skipped;
       allFailures.push(...r.failures || []);
     } else {
-      appErrors.push(`${unit.value}: no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`);
+      const specific = classifyFrappeFailure(unitOut);
+      appErrors.push(`${unit.value}: ${specific || `no JUnit output (is allow_tests enabled${remote ? " on the remote site" : ""}?)`}`);
     }
   }
   (0, import_node_fs8.writeFileSync)(logPath, logBuf);

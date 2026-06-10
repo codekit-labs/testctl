@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.37.3] - 2026-06-10
+
+### Fixed
+- **Frappe runner now reports *why* a run produced no results, accurately.** When `bench run-tests`
+  failed without emitting JUnit (very common on a restored **production** bench that lacks dev/test
+  deps), testctl reported a misleading `no JUnit output (is allow_tests enabled?)` — sending the user
+  to manually `cat` the raw log to find the real cause. A new `classifyFrappeFailure()` recognises
+  known signatures and reports them directly: the dev-requirements gate
+  (`Development dependencies are required` → "run `bench setup requirements --dev` on the bench; this
+  is one-time bench setup, not a test failure") and a missing site. Unrecognised output still falls
+  back to the generic message. Saves a log round-trip and tells the user the exact fix.
+
 ## [1.37.2] - 2026-06-10
 
 ### Fixed
