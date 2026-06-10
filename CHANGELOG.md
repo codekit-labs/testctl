@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.31.0] - 2026-06-10
+
+### Added
+- Two more universal guard skills (markdown-only; each discovers the project's own config rather
+  than hardcoding):
+  - **`/testctl:permissions-guard`** — tests that access control holds: unauthenticated requests are
+    denied, role boundaries are enforced, and users can't read/modify records they shouldn't
+    (record-level isolation, no privilege escalation). Works with Frappe DocType/Role permissions,
+    Next.js/API auth guards, and Supabase RLS. A real access hole is surfaced as a security finding.
+  - **`/testctl:money-guard`** — tests that money math is correct: rounding to each currency's
+    precision, no floating-point drift, totals that reconcile (subtotal + tax + shipping − discount
+    == grand total), and multi-currency conversion at the configured rate. Asserts exact amounts,
+    never fuzzy comparisons.
+
 ## [1.30.0] - 2026-06-10
 
 ### Added

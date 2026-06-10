@@ -124,8 +124,14 @@ And three more for the rest of the lifecycle:
 /testctl:tax-guard             # protect VAT/GST/sales-tax correctness on invoices, from your tax config
 ```
 
-`tax-guard` is universal — it reads your project's own tax setup (rates, accounts, categories) and
-asserts the invariants, so it works for any country (KSA ZATCA, India GST, EU/UK VAT, US sales tax).
+```
+/testctl:permissions-guard     # access control: deny unauthorized, enforce roles, isolate records
+/testctl:money-guard           # money math: rounding, no float drift, totals reconcile, multi-currency
+```
+
+`tax-guard`, `permissions-guard`, and `money-guard` are universal — each reads your project's own
+config (tax rates, auth/roles, currency precision) and asserts the invariants, so they protect the
+high-stakes areas (compliance, security, money) on any stack and in any country.
 
 ## Run history
 
