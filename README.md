@@ -171,7 +171,8 @@ To scaffold a ready-to-use GitHub Actions workflow, run `testctl init --ci` — 
 (`subosito/flutter-action`) if you test Flutter in CI.
 
 For a shareable human-friendly page, add `--report-html=report.html` — a standalone results page
-(no external assets).
+(no external assets). For a PR/issue-paste-friendly summary, add `--report-md=report.md` (Markdown
+table + failures).
 
 ## Notify on failure
 

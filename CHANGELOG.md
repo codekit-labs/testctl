@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.26.0] - 2026-06-10
+
+### Added
+- `testctl run --report-md[=path]` writes a Markdown results summary (a GFM table of apps + a
+  failures section) — paste-ready for PRs/issues. Bare flag → `testctl-report.md`. Best-effort;
+  never changes the exit code. Thanks to @64johnlee for the first community contribution (#2/#4).
+
 ## [1.25.0] - 2026-06-08
 
 ### Added

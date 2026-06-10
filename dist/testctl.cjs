@@ -10078,6 +10078,40 @@ ${f.message}` } };
     runs: [{ tool: { driver: { name: "testctl", informationUri: "https://github.com/codekit-labs/testctl", rules: [] } }, results: out }]
   };
 }
+function toMarkdown(results) {
+  const present = (results || []).filter((r) => r.present);
+  const escapePipe = (s) => String(s == null ? "" : s).replace(/\|/g, "\\|");
+  const status = (r) => r.cached ? "\u2713 cached" : r.errored ? "\u2717 error" : r.flaky ? "\u2691 flaky" : r.failed > 0 ? "\u2717 fail" : "\u2713 pass";
+  const rows = present.map((r) => {
+    const name = escapePipe(suiteName(r));
+    const cov = r.coverage != null ? r.coverage + "%" : "\u2014";
+    return `| ${name} | ${r.passed || 0} | ${r.failed || 0} | ${r.skipped || 0} | ${cov} | ${status(r)} |`;
+  });
+  const table = [
+    "| App | Passed | Failed | Skipped | Cov | Status |",
+    "|-----|--------|--------|---------|-----|--------|",
+    ...rows
+  ].join("\n");
+  const failSections = present.filter((r) => (r.failures || []).length).map((r) => {
+    const name = suiteName(r);
+    const items = r.failures.map((f) => `**${escapePipe(f.test)}**
+\`\`\`
+${f.message}
+\`\`\``).join("\n\n");
+    return `### ${name}
+
+${items}`;
+  });
+  const failBlock = failSections.length ? `
+
+## Failures
+
+${failSections.join("\n\n")}` : "";
+  return `## testctl report
+
+${table}${failBlock}
+`;
+}
 function toHtml(results) {
   const present = (results || []).filter((r) => r.present);
   const t = present.reduce((a, r) => ({
@@ -10923,7 +10957,7 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -11043,6 +11077,13 @@ Exit code: ${code}`);
       console.warn(`testctl: could not write html report: ${e.message}`);
     }
   }
+  if (mdPath) {
+    try {
+      (0, import_node_fs13.writeFileSync)((0, import_node_path13.resolve)(projectDir, mdPath), toMarkdown(results));
+    } catch (e) {
+      console.warn(`testctl: could not write markdown report: ${e.message}`);
+    }
+  }
   appendHistory(projectDir, historyEntry(results, (/* @__PURE__ */ new Date()).toISOString()));
   try {
     const tdir = (0, import_node_path13.join)(projectDir, ".testctl");
@@ -11130,19 +11171,21 @@ async function main() {
     const sarifPath = sarifEntry ? sarifEntry.includes("=") ? sarifEntry.split("=")[1] || "testctl-sarif.json" : "testctl-sarif.json" : null;
     const htmlEntry = rest.find((a) => a === "--report-html" || a.startsWith("--report-html="));
     const htmlPath = htmlEntry ? htmlEntry.includes("=") ? htmlEntry.split("=")[1] || "testctl-report.html" : "testctl-report.html" : null;
+    const mdEntry = rest.find((a) => a === "--report-md" || a.startsWith("--report-md="));
+    const mdPath = mdEntry ? mdEntry.includes("=") ? mdEntry.split("=")[1] || "testctl-report.md" : "testctl-report.md" : null;
     const retryEntry = rest.find((a) => a.startsWith("--retry="));
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
     const notifyEntry = rest.find((a) => a.startsWith("--notify="));
     const notifyUrl = notifyEntry ? notifyEntry.split("=").slice(1).join("=") || null : null;
     const watch2 = rest.includes("--watch");
-    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl);
+    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl, mdPath);
     if (watch2) {
       await cmdWatch(projectDir, runOnce);
       return;
     }
     return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain");
+  console.log("Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain");
   return process.exit(cmd ? 2 : 0);
 }
 main();
