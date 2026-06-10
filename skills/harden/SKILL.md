@@ -20,9 +20,11 @@ discover apps that already have tests and confirm the list with the user before 
    read the `TESTCTL_JSON` line. An app is a harden target if it **has tests** (passed + failed >
    0) — apps with no tests should go through `generate-tests` first. Respect any path/stack arg.
 
-2. **Understand what's already covered.** Read the app's source AND its existing tests. Identify
-   the **happy-path-only** gaps — branches, validations, and error handling the current tests never
-   exercise. Don't re-test what's already covered.
+2. **Understand what's already covered (token-cheap first).** Run
+   `node "<skill-base>/../../dist/testctl.cjs" context` — its `TESTCTL_CONTEXT` line gives each
+   app's **untested functions/classes (name + file:line)**, so you open only those. Then read that
+   source AND its existing tests to find the **happy-path-only** gaps — branches, validations, and
+   error handling the current tests never exercise. Don't re-test what's already covered.
 
 3. **Write edge-case tests** into NEW, clearly-named files (e.g. `*_edge_test.dart`,
    `*.edge.test.ts`). NEVER modify or overwrite existing tests. Cover the cases that actually break

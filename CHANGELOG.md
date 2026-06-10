@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.33.0] - 2026-06-10
+
+### Added
+- **`testctl context`** — a token-cheap, one-call work digest the test-skills consume instead of
+  discovering → running → globbing → reading whole files. Per app it reports: status + counts (from
+  the last run), the failure digest, coverage + below-gate, a recommended **action**
+  (generate / fix / boost / harden / ok), and the **untested functions/classes** (name + file:line)
+  found by a dependency-free, language-agnostic scan (Python / Dart / JS-TS) — i.e. the symbols no
+  test references yet. The `generate-tests`, `harden`, and `coverage-boost` skills now call it first
+  and target exactly those symbols, opening only the files they need. Emits a compact
+  `TESTCTL_CONTEXT` JSON line plus a human summary. Fully dynamic — derived from your actual code,
+  nothing hardcoded.
+
 ## [1.32.0] - 2026-06-10
 
 ### Added

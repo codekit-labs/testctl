@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { writeFileSync, existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { join, resolve, relative } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
 import { mapPool } from '../lib/pool.mjs';
@@ -17,7 +17,9 @@ import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
 import { buildNotifyPayload, postWebhook } from '../lib/notify.mjs';
 import { watchProject } from '../lib/watch.mjs';
-import { applyCoverageGate } from '../lib/coverage.mjs';
+import { applyCoverageGate, resolveThreshold } from '../lib/coverage.mjs';
+import { langOf, isTestFile, extractSymbols, untestedSymbols } from '../lib/symbols.mjs';
+import { formatContext } from '../lib/context.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
 import { runFlutter } from '../lib/runners/flutter.mjs';
 import { runElectron } from '../lib/runners/electron.mjs';
@@ -247,6 +249,73 @@ function cmdExplain(projectDir) {
   return 0;
 }
 
+const CTX_SKIP = new Set(['node_modules', '.git', 'build', '.dart_tool', 'ios', 'android', '.next', 'dist', 'out', 'Pods', 'vendor', '.venv', '__pycache__', 'coverage', '.testctl']);
+function walkSrcFiles(dir, acc, depth = 0) {
+  if (depth > 6) return;
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries) {
+    if (e.name.startsWith('.') || CTX_SKIP.has(e.name)) continue;
+    const full = join(dir, e.name);
+    if (e.isDirectory()) walkSrcFiles(full, acc, depth + 1);
+    else if (e.isFile()) acc.push(full);
+  }
+}
+
+// `testctl context` — one compact per-app digest a test-skill can act on without
+// discovering/running/reading broadly: status, failures, coverage, and the untested
+// functions/classes (name + file:line) found by a cheap language-agnostic scan.
+function cmdContext(projectDir, only) {
+  const config = loadConfig(projectDir);
+  const gate = config.coverageMin != null ? config.coverageMin : null;
+  const targets = discoverTargets(projectDir, config, only).filter((t) => !t.notice);
+
+  const lastByKey = {};
+  try {
+    const lr = JSON.parse(readFileSync(join(projectDir, '.testctl', 'last-run.json'), 'utf8'));
+    for (const r of lr.results || []) lastByKey[`${r.stack}:${r.label || r.stack}`] = r;
+  } catch { /* no prior run */ }
+
+  const apps = targets.map((t) => {
+    const last = lastByKey[`${t.stack}:${t.label || t.stack}`] || null;
+    const app = { stack: t.stack, label: t.label || t.stack, path: t.path || null };
+    app.tests = last ? (last.passed || 0) + (last.failed || 0) + (last.skipped || 0) : 0;
+    app.hasTests = app.tests > 0;
+    app.status = last ? (last.ok ? 'green' : 'red') : 'unknown';
+    app.coverage = last ? (last.coverage ?? null) : null;
+    app.failures = last ? (last.failures || []) : [];
+    const t2 = resolveThreshold({ stack: t.stack, label: t.label }, gate);
+    app.belowGate = app.coverage != null && t2 != null && app.coverage < t2;
+
+    app.untested = [];
+    if (t.path) {
+      const abs = resolve(projectDir, t.path);
+      const files = [];
+      walkSrcFiles(abs, files);
+      const testFiles = files.filter((f) => isTestFile(f));
+      const srcFiles = files.filter((f) => !isTestFile(f));
+      if (!app.hasTests && testFiles.length) app.hasTests = true;
+      let testText = '';
+      for (const tf of testFiles.slice(0, 60)) { try { testText += '\n' + readFileSync(tf, 'utf8'); } catch { /* skip */ } }
+      const symbols = [];
+      for (const sf of srcFiles.slice(0, 250)) {
+        const lang = langOf(sf);
+        if (!lang) continue;
+        let txt = '';
+        try { txt = readFileSync(sf, 'utf8'); } catch { continue; }
+        for (const s of extractSymbols(txt, lang)) symbols.push({ ...s, file: relative(projectDir, sf) });
+      }
+      app.untested = untestedSymbols(symbols, testText).slice(0, 40);
+    }
+    app.untestedCount = app.untested.length;
+    return app;
+  });
+
+  console.log(formatContext(apps));
+  console.log('TESTCTL_CONTEXT ' + JSON.stringify({ apps }));
+  return 0;
+}
+
 async function cmdWatch(projectDir, runOnce) {
   await runOnce();
   console.log('\n👀 watching for changes — Ctrl-C to stop');
@@ -279,6 +348,10 @@ async function main() {
   if (cmd === 'doctor') return process.exit(cmdDoctor());
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
+  if (cmd === 'context') {
+    const a = process.argv[3];
+    return process.exit(cmdContext(projectDir, a && STACKS.includes(a) ? a : null));
+  }
   if (cmd === 'run') {
     const rest = process.argv.slice(3);
     const coverage = rest.includes('--coverage');
@@ -316,7 +389,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 

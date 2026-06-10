@@ -156,6 +156,19 @@ When tests fail, the machine-readable `TESTCTL_JSON` line includes a `failures[]
 the failing test name, file/line, and a trimmed message — so tools (and `/testctl:fix-failures`)
 can diagnose without parsing raw logs. Messages are trimmed and capped to stay small.
 
+## Work context (extreme token-saver)
+
+```
+testctl context        # one compact digest the skills act on
+```
+
+`testctl context` gives a test-skill its whole situational picture in **one cheap call** — per app:
+its status, the failure digest, coverage gaps, a recommended action (generate / fix / boost / harden
+/ ok), and the **untested functions/classes** (name + file:line) found by a dependency-free,
+language-agnostic scan of your actual code. So the skills target exactly the gaps and open only the
+files they need, instead of discovering → running → reading the whole project. Nothing is
+hardcoded — it's derived from your code.
+
 ## Run only what changed
 
 ```bash

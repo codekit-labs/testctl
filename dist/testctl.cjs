@@ -10344,6 +10344,99 @@ function applyCoverageGate(results, min) {
   return results;
 }
 
+// lib/symbols.mjs
+var KEYWORDS = /* @__PURE__ */ new Set([
+  "if",
+  "for",
+  "while",
+  "switch",
+  "catch",
+  "return",
+  "function",
+  "class",
+  "async",
+  "await",
+  "new",
+  "typeof",
+  "void",
+  "case",
+  "do",
+  "else",
+  "try",
+  "super",
+  "this"
+]);
+function langOf(path) {
+  const ext = (String(path).match(/\.([a-z0-9]+)$/i) || [])[1] || "";
+  if (ext === "py") return "py";
+  if (ext === "dart") return "dart";
+  if (["js", "jsx", "ts", "tsx", "mjs", "cjs"].includes(ext)) return "js";
+  return null;
+}
+function isTestFile(path) {
+  const p = String(path);
+  return /(^|[\\/])tests?[\\/]/.test(p) || /(^|[\\/])test_\w+\.(py|dart|js|ts)$/.test(p) || /[._-](test|spec)\.[a-z]+$/i.test(p) || /_test\.(py|dart)$/.test(p);
+}
+function extractSymbols(text, lang) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const push = (name, line, kind) => {
+    if (!name || KEYWORDS.has(name) || name.startsWith("_")) return;
+    const key = `${name}:${line}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ name, line, kind });
+  };
+  const lines = String(text || "").split("\n");
+  lines.forEach((line, i) => {
+    const ln = i + 1;
+    if (lang === "py") {
+      let m = /^\s*def\s+(\w+)/.exec(line);
+      if (m) push(m[1], ln, "function");
+      m = /^\s*class\s+(\w+)/.exec(line);
+      if (m) push(m[1], ln, "class");
+    } else if (lang === "js") {
+      let m = /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)/.exec(line);
+      if (m) push(m[1], ln, "function");
+      m = /^\s*(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*=>/.exec(line);
+      if (m) push(m[1], ln, "function");
+      m = /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)/.exec(line);
+      if (m) push(m[1], ln, "class");
+    } else if (lang === "dart") {
+      let m = /^\s*(?:abstract\s+)?class\s+(\w+)/.exec(line);
+      if (m) push(m[1], ln, "class");
+      m = /^\s*(?:[\w<>?,\s]+\s+)?(\w+)\s*\([^;{]*\)\s*(?:async\s*\*?\s*)?(?:\{|=>)/.exec(line);
+      if (m) push(m[1], ln, "function");
+    }
+  });
+  return out;
+}
+function untestedSymbols(symbols, testText) {
+  const t = String(testText || "");
+  return symbols.filter((s) => !new RegExp(`\\b${s.name}\\b`).test(t));
+}
+
+// lib/context.mjs
+function actionFor(app) {
+  if (!app.hasTests) return "generate";
+  if (app.status === "red") return "fix";
+  if (app.belowGate) return "boost";
+  if ((app.untestedCount || 0) > 0) return "harden";
+  return "ok";
+}
+function formatContext(apps) {
+  if (!apps.length) return "No testable apps found.";
+  const lines = ["testctl context", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"];
+  for (const a of apps) {
+    const name = a.label && a.label !== a.stack ? `${a.stack} (${a.label})` : a.stack;
+    const status = !a.hasTests ? "no-tests" : a.status;
+    const cov = a.coverage != null ? `${a.coverage}%` : "\u2014";
+    lines.push(`  [${actionFor(a)}] ${name.padEnd(24)} tests:${String(a.tests ?? 0).padStart(4)}  ${String(status).padEnd(8)} cov:${cov.padStart(4)}  untested:${a.untestedCount || 0}`);
+  }
+  lines.push("Actions: generate (no tests) \xB7 fix (red) \xB7 boost (below gate) \xB7 harden (untested symbols) \xB7 ok");
+  return lines.join("\n");
+}
+
 // lib/spawn.mjs
 var import_node_child_process3 = require("node:child_process");
 function spawnAsync(command, args = [], opts = {}) {
@@ -11162,6 +11255,78 @@ function cmdExplain(projectDir) {
   console.log(formatExplain(groupFailures(parsed.results || [])));
   return 0;
 }
+var CTX_SKIP = /* @__PURE__ */ new Set(["node_modules", ".git", "build", ".dart_tool", "ios", "android", ".next", "dist", "out", "Pods", "vendor", ".venv", "__pycache__", "coverage", ".testctl"]);
+function walkSrcFiles(dir, acc, depth = 0) {
+  if (depth > 6) return;
+  let entries;
+  try {
+    entries = (0, import_node_fs14.readdirSync)(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith(".") || CTX_SKIP.has(e.name)) continue;
+    const full = (0, import_node_path14.join)(dir, e.name);
+    if (e.isDirectory()) walkSrcFiles(full, acc, depth + 1);
+    else if (e.isFile()) acc.push(full);
+  }
+}
+function cmdContext(projectDir, only) {
+  const config = loadConfig(projectDir);
+  const gate = config.coverageMin != null ? config.coverageMin : null;
+  const targets = discoverTargets(projectDir, config, only).filter((t) => !t.notice);
+  const lastByKey = {};
+  try {
+    const lr = JSON.parse((0, import_node_fs14.readFileSync)((0, import_node_path14.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
+    for (const r of lr.results || []) lastByKey[`${r.stack}:${r.label || r.stack}`] = r;
+  } catch {
+  }
+  const apps = targets.map((t) => {
+    const last = lastByKey[`${t.stack}:${t.label || t.stack}`] || null;
+    const app = { stack: t.stack, label: t.label || t.stack, path: t.path || null };
+    app.tests = last ? (last.passed || 0) + (last.failed || 0) + (last.skipped || 0) : 0;
+    app.hasTests = app.tests > 0;
+    app.status = last ? last.ok ? "green" : "red" : "unknown";
+    app.coverage = last ? last.coverage ?? null : null;
+    app.failures = last ? last.failures || [] : [];
+    const t2 = resolveThreshold({ stack: t.stack, label: t.label }, gate);
+    app.belowGate = app.coverage != null && t2 != null && app.coverage < t2;
+    app.untested = [];
+    if (t.path) {
+      const abs = (0, import_node_path14.resolve)(projectDir, t.path);
+      const files = [];
+      walkSrcFiles(abs, files);
+      const testFiles = files.filter((f) => isTestFile(f));
+      const srcFiles = files.filter((f) => !isTestFile(f));
+      if (!app.hasTests && testFiles.length) app.hasTests = true;
+      let testText = "";
+      for (const tf of testFiles.slice(0, 60)) {
+        try {
+          testText += "\n" + (0, import_node_fs14.readFileSync)(tf, "utf8");
+        } catch {
+        }
+      }
+      const symbols = [];
+      for (const sf of srcFiles.slice(0, 250)) {
+        const lang = langOf(sf);
+        if (!lang) continue;
+        let txt = "";
+        try {
+          txt = (0, import_node_fs14.readFileSync)(sf, "utf8");
+        } catch {
+          continue;
+        }
+        for (const s of extractSymbols(txt, lang)) symbols.push({ ...s, file: (0, import_node_path14.relative)(projectDir, sf) });
+      }
+      app.untested = untestedSymbols(symbols, testText).slice(0, 40);
+    }
+    app.untestedCount = app.untested.length;
+    return app;
+  });
+  console.log(formatContext(apps));
+  console.log("TESTCTL_CONTEXT " + JSON.stringify({ apps }));
+  return 0;
+}
 async function cmdWatch(projectDir, runOnce) {
   await runOnce();
   console.log("\n\u{1F440} watching for changes \u2014 Ctrl-C to stop");
@@ -11197,6 +11362,10 @@ async function main() {
   if (cmd === "doctor") return process.exit(cmdDoctor());
   if (cmd === "report") return process.exit(cmdReport(projectDir));
   if (cmd === "explain") return process.exit(cmdExplain(projectDir));
+  if (cmd === "context") {
+    const a = process.argv[3];
+    return process.exit(cmdContext(projectDir, a && STACKS.includes(a) ? a : null));
+  }
   if (cmd === "run") {
     const rest = process.argv.slice(3);
     const coverage = rest.includes("--coverage");
@@ -11235,7 +11404,7 @@ async function main() {
     }
     return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain");
+  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context");
   return process.exit(cmd ? 2 : 0);
 }
 main();

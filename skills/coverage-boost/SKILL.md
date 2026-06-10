@@ -30,7 +30,9 @@ skipped with a note.
    - Electron/jest → `coverage/coverage-summary.json` + `coverage-final.json` (per-file uncovered
      statements/branches).
    - Frappe → the cobertura xml (uncovered lines per class).
-   Map those lines back to the source — which functions/branches are never hit.
+   Map those lines back to the source — which functions/branches are never hit. Tip:
+   `node "<skill-base>/../../dist/testctl.cjs" context` lists each app's untested functions/classes
+   (name + file:line) up front, so you open only those files.
 
 3. **Write targeted tests.** In NEW files (never overwriting), write unit-logic tests that exercise
    exactly those uncovered functions and branches — both sides of each untested `if`, each error

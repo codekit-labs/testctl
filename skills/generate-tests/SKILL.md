@@ -19,7 +19,10 @@ run commands.
 ## Steps
 
 1. **Find targets.** Run the engine to discover apps:
-   `node "<skill-base>/../../dist/testctl.cjs" run --quiet` (read the `TESTCTL_JSON` line). For each
+   `node "<skill-base>/../../dist/testctl.cjs" context` FIRST (token-cheap) — it lists each app's
+   recommended action and its **untested functions/classes (name + file:line)** in the
+   `TESTCTL_CONTEXT` line, so you target exactly those and open only the files you need instead of
+   reading the whole app. (Use `... run --quiet` if you need a fresh run.) For each
    discovered app, an app "needs tests" if it has no test directory, an empty one, or the run
    reported 0 passed + 0 failed. Build the target list (respecting any path/stack argument).
    If nothing needs tests, say so and stop.
