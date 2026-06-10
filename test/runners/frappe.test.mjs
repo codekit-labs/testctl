@@ -120,6 +120,23 @@ test('classifyFrappeFailure: missing site → site-not-found hint', () => {
   assert.match(msg, /does not exist|not found/i);
 });
 
+test('classifyFrappeFailure: restored-site encryption-key mismatch → actionable, not allow_tests', () => {
+  const out = 'cryptography.fernet.InvalidToken\nfrappe.exceptions.ValidationError: Failed to decrypt key Connected App.9lufs5d7tu.client_secret\nEncryption key is invalid! Please check site_config.json';
+  const msg = classifyFrappeFailure(out);
+  assert.match(msg, /encryption[- ]key/i);
+  assert.match(msg, /site_config\.json|restored/i);
+  assert.doesNotMatch(msg, /allow_tests/i);
+});
+
+test('classifyFrappeFailure: test-bootstrap MandatoryError → reports the exact doctype:field', () => {
+  const out = '  raise frappe.MandatoryError(\nfrappe.exceptions.MandatoryError: [Company, _Test Company]: default_warehouse_for_sales_return';
+  const msg = classifyFrappeFailure(out);
+  assert.match(msg, /mandatory/i);
+  assert.match(msg, /default_warehouse_for_sales_return/);
+  assert.match(msg, /before_tests/);
+  assert.doesNotMatch(msg, /allow_tests/i);
+});
+
 test('classifyFrappeFailure: unrecognised output → null (caller uses generic fallback)', () => {
   assert.equal(classifyFrappeFailure('some unrelated traceback'), null);
   assert.equal(classifyFrappeFailure(''), null);

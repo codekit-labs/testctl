@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.37.4] - 2026-06-10
+
+### Fixed
+- **`classifyFrappeFailure()` now recognises two more restored-production blockers**, so testctl
+  reports them directly instead of the misleading `no JUnit output (is allow_tests enabled?)` —
+  which otherwise sends the user grepping the raw traceback:
+  - **Encryption-key mismatch** (`cryptography.fernet.InvalidToken` / "Encryption key is invalid" /
+    "Failed to decrypt key") — a restored site whose `encryption_key` no longer matches its
+    encrypted fields (often a Connected App / Email Account OAuth secret, which Frappe touches during
+    test setup). Reports: restore the original `encryption_key` in site_config.json, or clear/disable
+    the affected record. Not a test failure.
+  - **Test-bootstrap `MandatoryError`** — a mandatory (often custom) field is unset when Frappe
+    auto-creates its test masters (e.g. `[Company, _Test Company]: default_warehouse_for_sales_return`).
+    The exact `doctype: field` is echoed, with the fix: seed it via a `before_tests` hook or make the
+    field non-mandatory on the test site. Not a test failure.
+
 ## [1.37.3] - 2026-06-10
 
 ### Fixed
