@@ -11,7 +11,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // dynamic require() of Node built-ins, which is unsupported in an ESM bundle. A CJS bundle
 // handles require() natively and still runs under Node with no node_modules.
 await build({
-  entryPoints: [join(root, 'bin', 'testctl.mjs')],
+  entryPoints: [join(root, 'bin', 'cli.mjs')],
   outfile: join(root, 'dist', 'testctl.cjs'),
   bundle: true,
   platform: 'node',

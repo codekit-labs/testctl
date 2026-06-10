@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.37.2] - 2026-06-10
+
+### Fixed
+- **`bin/testctl.mjs` now works in a plugin clone with no `node_modules`.** It was the raw ESM
+  source entry, which `import`s the npm deps (`yaml`, `fast-xml-parser`); since the plugin ships
+  as a git clone with no `npm install`, running it crashed with `ERR_MODULE_NOT_FOUND` — anyone
+  (or any model) who invoked the conventional `bin/` path hit it, even with the v1.37.1 hook fix.
+  The real CLI source moved to `bin/cli.mjs` (the esbuild entry); `bin/testctl.mjs` is now a tiny
+  dependency-free launcher that imports the bundled, fully-inlined `dist/testctl.cjs`. Both the
+  `bin/` path and `dist/` path now run with zero install. `package.json`'s `bin` still points at
+  `bin/testctl.mjs`, so a global/symlinked `testctl` also resolves to the dependency-free bundle.
+
 ## [1.37.1] - 2026-06-10
 
 ### Fixed

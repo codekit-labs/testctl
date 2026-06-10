@@ -9436,7 +9436,7 @@ var require_fxp = __commonJS({
   }
 });
 
-// bin/testctl.mjs
+// bin/cli.mjs
 var import_node_fs14 = require("node:fs");
 var import_node_path14 = require("node:path");
 
@@ -9723,7 +9723,7 @@ function appendHistory(projectDir, entry) {
   }
 }
 
-// bin/testctl.mjs
+// bin/cli.mjs
 var import_node_os6 = require("node:os");
 
 // lib/init.mjs
@@ -11050,7 +11050,7 @@ function saveCache(projectDir, cache) {
   }
 }
 
-// bin/testctl.mjs
+// bin/cli.mjs
 var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase"];
 function cmdInit(projectDir, { ci = false } = {}) {
   const path = (0, import_node_path14.join)(projectDir, "testctl.yaml");
