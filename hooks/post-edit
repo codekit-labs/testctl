@@ -23,5 +23,7 @@ proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 dir="$proj/.testctl"
 mkdir -p "$dir" 2>/dev/null || exit 0
 [ -f "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore" 2>/dev/null || true
-touch "$dir/.pending-tests" 2>/dev/null || true
+# Record the plugin root so the Stop hook can build a RUNNABLE engine command
+# (there is no global `testctl` binary — the engine is node <root>/dist/testctl.cjs).
+printf '%s' "${CLAUDE_PLUGIN_ROOT:-}" > "$dir/.pending-tests" 2>/dev/null || true
 exit 0

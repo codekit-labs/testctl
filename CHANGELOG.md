@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.37.1] - 2026-06-10
+
+### Fixed
+- Auto-offer-after-coding now suggests a **runnable** command. v1.36 offered a bare
+  `testctl run …`, but there is no global `testctl` binary — Claude ran it and got
+  `command not found`. The Stop hook now records the plugin root (via the PostToolUse marker) and
+  offers `node "<plugin>/dist/testctl.cjs" run --changed --quiet --cache` (falling back to the
+  `/testctl:test-all` command), and hints to run `… init` when a stack reports it needs a
+  `testctl.yaml` instead of treating that as a failure.
+
 ## [1.37.0] - 2026-06-10
 
 ### Added

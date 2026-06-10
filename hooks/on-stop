@@ -7,14 +7,41 @@ set -euo pipefail
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 marker="$proj/.testctl/.pending-tests"
 [ -f "$marker" ] || exit 0
+root="$(cat "$marker" 2>/dev/null || true)"   # plugin root recorded by post-edit
 rm -f "$marker" 2>/dev/null || true
 
 # Opt-out + loop guard.
 if [ -f "$proj/testctl.yaml" ] && grep -qE 'autoOffer:[[:space:]]*false' "$proj/testctl.yaml"; then exit 0; fi
 if [ "${stop_hook_active:-}" = "true" ]; then exit 0; fi
 
-MSG="You changed source files this turn. In ONE short sentence, OFFER to run the project's tests with testctl — suggest 'testctl run --changed --quiet --cache' (only what changed, skipping already-green apps) and, if anything comes back red, /testctl:fix-failures. Ask the user yes/no; do NOT run anything yourself. If tests were already run this turn or the user declined, skip the offer."
+# Build a RUNNABLE engine command — there is NO global `testctl` binary; the engine is
+# node <plugin-root>/dist/testctl.cjs. Resolve the root from the marker or the env.
+engine=""
+[ -n "$root" ] && [ -f "$root/dist/testctl.cjs" ] && engine="$root/dist/testctl.cjs"
+if [ -z "$engine" ] && [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "${CLAUDE_PLUGIN_ROOT}/dist/testctl.cjs" ]; then
+  engine="${CLAUDE_PLUGIN_ROOT}/dist/testctl.cjs"
+fi
 
-# Minimal JSON escaping (MSG has no quotes/newlines/backslashes).
-printf '{"decision":"block","reason":"%s"}\n' "$MSG"
+if [ -n "$engine" ]; then
+  RUN="node \"$engine\" run --changed --quiet --cache"
+  INIT="node \"$engine\" init"
+else
+  RUN="the /testctl:test-all command"
+  INIT="the /testctl:doctor command"
+fi
+
+MSG="You changed source files this turn. In ONE short sentence, OFFER (don't run it yourself — ask yes/no) to verify nothing broke by running: ${RUN} — runs only what changed, skipping already-green apps; if anything is red, offer /testctl:fix-failures. IMPORTANT: there is no global \`testctl\` binary — always invoke it via that exact node command (or the slash command), never a bare \`testctl ...\`. If the run reports a stack needs config (e.g. Frappe: 'needs benchPath, site, apps'), there is no testctl.yaml yet — suggest ${INIT} first rather than treating it as a failure. If tests were already run this turn or the user declined, skip the offer."
+
+# JSON-escape the reason (it now contains quotes/backslashes/path separators).
+escape_for_json() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+printf '{"decision":"block","reason":"%s"}\n' "$(escape_for_json "$MSG")"
 exit 0
