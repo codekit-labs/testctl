@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.29.0] - 2026-06-10
+
+### Added
+- Three more test-case skills (markdown-only; engine unchanged):
+  - **`/testctl:regression-from-bug`** — turns a bug report / stack trace into a test that
+    reproduces it FIRST (red, for the right reason), then hands the fix to `fix-failures`. Proper
+    TDD for bug-fixing.
+  - **`/testctl:flaky-hunter`** — runs a suite several times, isolates the tests that flip
+    pass↔fail, diagnoses the cause (timing, order-dependence, shared state, non-determinism), and
+    stabilizes them — never hides flakiness behind a retry.
+  - **`/testctl:data-factory`** — generates reusable test-data builders/factories so tests stop
+    hand-rolling fixtures; for Frappe/Supabase the factories REUSE existing masters and never create
+    heavyweight records that trigger framework setup cascades.
+
 ## [1.28.0] - 2026-06-10
 
 ### Added

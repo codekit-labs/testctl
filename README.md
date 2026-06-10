@@ -115,6 +115,14 @@ Three skills go beyond "do they pass" to "are they any good":
 and `test-audit` catches tests that pass without asserting anything. All additive, never weaken a
 test, and leave changes uncommitted for review.
 
+And three more for the rest of the lifecycle:
+
+```
+/testctl:regression-from-bug   # turn a bug / stack trace into a failing reproduction test, then fix
+/testctl:flaky-hunter          # run a suite N times, find + stabilize the flaky tests
+/testctl:data-factory          # generate reusable test-data builders (Frappe factories reuse masters)
+```
+
 ## Run history
 
 Every `run` is recorded to `.testctl/history.jsonl` in the project (the folder self-ignores via
