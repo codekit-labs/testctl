@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeResult } from '../lib/result.mjs';
-import { toJUnitXml, toSarif } from '../lib/export.mjs';
+import { toJUnitXml, toSarif, toMarkdown } from '../lib/export.mjs';
 import { toHtml } from '../lib/export.mjs';
 
 test('toJUnitXml aggregates totals and emits a failure testcase per digest entry', () => {
@@ -70,4 +70,36 @@ test('toHtml green-only run has no failure rows', () => {
   const html = toHtml([makeResult({ stack: 'flutter', label: 'a', passed: 5, failed: 0 })]);
   assert.match(html, /^<!doctype html>/i);
   assert.equal(/<pre/.test(html), false);          // no failure <pre> blocks
+});
+
+test('toMarkdown has header row, one row per app, and failure section', () => {
+  const results = [
+    makeResult({ stack: 'flutter', label: 'a', passed: 2, failed: 1, durationMs: 1000,
+      failures: [{ test: 'adds', file: null, line: null, message: 'Expected 2 got 3' }] }),
+    makeResult({ stack: 'electron', label: 'd', passed: 3, failed: 0 }),
+  ];
+  const md = toMarkdown(results);
+  assert.match(md, /^## testctl report/);
+  assert.match(md, /\| App \| Passed \| Failed \| Skipped \| Cov \| Status \|/);
+  assert.match(md, /flutter \(a\)/);
+  assert.match(md, /electron \(d\)/);
+  assert.match(md, /## Failures/);
+  assert.match(md, /adds/);
+  assert.match(md, /Expected 2 got 3/);
+});
+
+test('toMarkdown escapes pipe characters in names and messages', () => {
+  const results = [
+    makeResult({ stack: 'flutter', label: 'a|b', passed: 1, failed: 1,
+      failures: [{ test: 'x|y', file: null, line: null, message: 'got a|b' }] }),
+  ];
+  const md = toMarkdown(results);
+  assert.match(md, /a\\|b/);                       // label pipe escaped in table row
+  assert.match(md, /x\\|y/);                       // test name pipe escaped in failure section
+});
+
+test('toMarkdown green-only run has no failures section', () => {
+  const md = toMarkdown([makeResult({ stack: 'flutter', label: 'a', passed: 5, failed: 0 })]);
+  assert.match(md, /^## testctl report/);
+  assert.equal(/## Failures/.test(md), false);
 });
