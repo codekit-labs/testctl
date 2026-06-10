@@ -7,7 +7,7 @@ import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
-import { buildWorkflowYaml } from '../lib/ci.mjs';
+import { buildWorkflowYaml, buildGitlabYaml } from '../lib/ci.mjs';
 import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
@@ -42,7 +42,15 @@ function cmdInit(projectDir, { ci = false } = {}) {
     }
     console.log('  Fill any <FILL-ME> values, then run: testctl run');
   }
-  if (ci) {
+  if (ci === 'gitlab') {
+    const wfPath = join(projectDir, '.gitlab-ci.yml');
+    if (existsSync(wfPath)) {
+      console.log('.gitlab-ci.yml already exists — leaving it untouched.');
+    } else {
+      writeFileSync(wfPath, buildGitlabYaml());
+      console.log(`Created ${wfPath}`);
+    }
+  } else if (ci) {
     const wfDir = join(projectDir, '.github', 'workflows');
     const wfPath = join(wfDir, 'testctl.yml');
     if (existsSync(wfPath)) {
@@ -263,7 +271,11 @@ function cmdDoctor() {
 async function main() {
   const [, , cmd, arg] = process.argv;
   const projectDir = process.cwd();
-  if (cmd === 'init') return process.exit(cmdInit(projectDir, { ci: process.argv.slice(3).includes('--ci') }));
+  if (cmd === 'init') {
+    const ciArg = process.argv.slice(3).find((a) => a === '--ci' || a.startsWith('--ci='));
+    const ci = ciArg ? (ciArg.includes('=') ? (ciArg.split('=')[1] || 'github') : 'github') : false;
+    return process.exit(cmdInit(projectDir, { ci }));
+  }
   if (cmd === 'doctor') return process.exit(cmdDoctor());
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
@@ -304,7 +316,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain');
   return process.exit(cmd ? 2 : 0);
 }
 

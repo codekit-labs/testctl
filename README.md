@@ -180,9 +180,10 @@ drives inline annotations on a GitHub PR's "Files changed" tab. Bare `--report-j
 `--report-sarif` default to `testctl-junit.xml` / `testctl-sarif.json`. A write failure warns but
 never changes the exit code.
 
-To scaffold a ready-to-use GitHub Actions workflow, run `testctl init --ci` — it writes
-`.github/workflows/testctl.yml` (fetch engine → run → upload JUnit). Add a Flutter setup step
-(`subosito/flutter-action`) if you test Flutter in CI.
+To scaffold a ready-to-use CI workflow, run `testctl init --ci` — it writes
+`.github/workflows/testctl.yml` (fetch engine → run → upload JUnit). Use `testctl init --ci=gitlab`
+for a `.gitlab-ci.yml` instead. Add a Flutter setup step (`subosito/flutter-action`) if you test
+Flutter in CI.
 
 For a shareable human-friendly page, add `--report-html=report.html` — a standalone results page
 (no external assets). For a PR/issue-paste-friendly summary, add `--report-md=report.md` (Markdown

@@ -34,3 +34,13 @@ test('formatDoctor flags Node below 20', () => {
   });
   assert.match(out, /✗ node/);
 });
+
+test('formatDoctor shows the testctl version when present', () => {
+  const report = { version: '9.9.9', node: { version: 'v20.0.0', major: 20, ok: true }, tools: [], readyStacks: ['Electron'] };
+  const out = formatDoctor(report);
+  assert.match(out, /testctl v9\.9\.9/);
+});
+test('formatDoctor omits the version line when version is null', () => {
+  const report = { version: null, node: { version: 'v20.0.0', major: 20, ok: true }, tools: [], readyStacks: [] };
+  assert.equal(/testctl v/.test(formatDoctor(report)), false);
+});

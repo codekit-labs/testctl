@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.28.0] - 2026-06-10
+
+### Added
+- `testctl doctor` now prints the installed `testctl vX.Y.Z` at the top of its report (#1).
+- `testctl init --ci=gitlab` scaffolds a `.gitlab-ci.yml` (fetch the engine → run →
+  `artifacts:reports:junit`) alongside the existing GitHub Actions template; `--ci` (or
+  `--ci=github`) is unchanged. Never overwrites an existing file (#3).
+
 ## [1.27.0] - 2026-06-10
 
 ### Added
