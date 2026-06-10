@@ -121,7 +121,11 @@ And three more for the rest of the lifecycle:
 /testctl:regression-from-bug   # turn a bug / stack trace into a failing reproduction test, then fix
 /testctl:flaky-hunter          # run a suite N times, find + stabilize the flaky tests
 /testctl:data-factory          # generate reusable test-data builders (Frappe factories reuse masters)
+/testctl:tax-guard             # protect VAT/GST/sales-tax correctness on invoices, from your tax config
 ```
+
+`tax-guard` is universal — it reads your project's own tax setup (rates, accounts, categories) and
+asserts the invariants, so it works for any country (KSA ZATCA, India GST, EU/UK VAT, US sales tax).
 
 ## Run history
 

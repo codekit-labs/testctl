@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.30.0] - 2026-06-10
+
+### Added
+- **`/testctl:tax-guard`** (markdown-only skill): generates tests that protect tax correctness on
+  invoices — tax line present + account set, tax = base × the configured rate (rounded), totals add
+  up, rate-by-category (standard / zero-rated / exempt), tax-ID present where required. It discovers
+  the project's *own* tax configuration rather than hardcoding a rate, so it works for any country
+  (KSA ZATCA, India GST, EU/UK VAT, US sales tax are just instances). Country-specific e-invoice /
+  QR / XML checks are an optional add-on, gated on that compliance app being installed.
+
 ## [1.29.0] - 2026-06-10
 
 ### Added
