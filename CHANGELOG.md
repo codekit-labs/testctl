@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.37.0] - 2026-06-10
+
+### Added
+- **`/testctl:security-guard`** (skill) — generates **defensive** security tests for your own app:
+  it feeds hostile-but-safe inputs to the project's real entry points and asserts safe handling —
+  injection (SQL/command) parameterized/rejected, XSS escaped, broken access control / IDOR denied,
+  no secrets in code/logs/responses, SSRF blocked, no eval/pickle on untrusted input, mass-assignment
+  ignored, and input-size / pagination / rate limits enforced (DoS resilience). Discovers the
+  project's own surface — nothing hardcoded. A real hole is reported as a security finding (→
+  `fix-failures`), never exploited; strictly tests your own code, pairs with `mock-externals`.
+
 ## [1.36.0] - 2026-06-10
 
 ### Added

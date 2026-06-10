@@ -142,6 +142,7 @@ And three more for the rest of the lifecycle:
 /testctl:snapshot              # golden/snapshot tests for output-heavy code (no hand-written asserts)
 /testctl:scaffold              # zero-to-one: set up the test harness for an app that has none
 /testctl:mock-externals        # stub email/SMS/payment/webhooks/HTTP so tests never hit real services
+/testctl:security-guard        # defensive security tests for YOUR app: injection/XSS/access/secrets/SSRF/DoS-resilience
 ```
 
 > **Testing on restored production data?** Run `/testctl:mock-externals` so tests can't fire real
