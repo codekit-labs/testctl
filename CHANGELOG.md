@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.34.0] - 2026-06-10
+
+### Added
+- Three skills that make authoring test cases simpler (markdown-only):
+  - **`/testctl:test-this`** — describe a behaviour in plain English ("a Job with a 1000 invoice and
+    a 500 payment shows Profit 500") and it writes the actual runnable test, runs it green, and
+    leaves it for review. Say the case, get the test.
+  - **`/testctl:snapshot`** — sets up snapshot / golden tests for output-heavy code (serializers,
+    reports, API responses, widgets) so you don't hand-write assertions; normalizes non-determinism
+    and asks you to confirm the captured baseline before trusting it.
+  - **`/testctl:scaffold`** — zero-to-one: sets up the testing harness for an app that has none
+    (jest/vitest, Flutter `test/`, Frappe test module, Supabase pgTAP) plus a first passing test, so
+    `testctl run` works — then hands off to `generate-tests`.
+
 ## [1.33.0] - 2026-06-10
 
 ### Added

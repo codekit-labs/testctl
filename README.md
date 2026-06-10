@@ -129,6 +129,14 @@ And three more for the rest of the lifecycle:
 /testctl:money-guard           # money math: rounding, no float drift, totals reconcile, multi-currency
 ```
 
+…and three that make writing tests easier:
+
+```
+/testctl:test-this             # describe a case in plain English → get the runnable test
+/testctl:snapshot              # golden/snapshot tests for output-heavy code (no hand-written asserts)
+/testctl:scaffold              # zero-to-one: set up the test harness for an app that has none
+```
+
 ```
 /testctl:date-tz-guard         # date/time: no tz off-by-one, DST, boundaries, duration math
 /testctl:api-contract          # API: status codes, response shape, error envelope, auth, pagination
