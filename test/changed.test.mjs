@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { isUnder, selectChangedTargets, gitChangedFiles } from '../lib/changed.mjs';
+import { spawnSync } from 'node:child_process';
+import { isUnder, selectChangedTargets, gitChangedFiles, gitRepoRoots } from '../lib/changed.mjs';
 
 test('isUnder: nested file is under dir; sibling/prefix is not', () => {
   assert.equal(isUnder('/a/b/c.js', '/a/b'), true);
@@ -45,4 +46,45 @@ test('gitChangedFiles fails open (files=null + note) outside a git repo', () => 
   const r = gitChangedFiles(dir, null);
   assert.equal(r.files, null);
   assert.match(r.note, /not a git repo/i);
+});
+
+test('gitRepoRoots: unions project root + each target dir’s toplevel, de-duped, nulls dropped, stable order', () => {
+  const map = { '/proj': null, '/proj/apps/a': '/proj/apps/a', '/proj/apps/b': '/proj/apps/b', '/proj/apps/a/sub': '/proj/apps/a' };
+  const toplevel = (d) => (d in map ? map[d] : null);
+  const roots = gitRepoRoots('/proj', ['/proj/apps/a', '/proj/apps/a/sub', '/proj/apps/b'], toplevel);
+  assert.deepEqual(roots, ['/proj/apps/a', '/proj/apps/b']);
+});
+
+test('gitRepoRoots: includes the project root when it is itself a repo, first', () => {
+  const toplevel = (d) => (d === '/p' ? '/p' : (d === '/p/x' ? '/p/x' : null));
+  assert.deepEqual(gitRepoRoots('/p', ['/p/x'], toplevel), ['/p', '/p/x']);
+});
+
+test('gitChangedFiles: unions changes from two separate sub-repos under a non-git root', () => {
+  if (spawnSync('git', ['--version']).status !== 0) return; // skip if git absent
+  // realpath: git rev-parse --show-toplevel canonicalizes symlinks (e.g. macOS /var → /private/var),
+  // so resolve the temp root to its canonical form to compare like-for-like.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'testctl-multirepo-')));
+  const mkrepo = (name, file) => {
+    const dir = join(root, name);
+    mkdirSync(dir, { recursive: true });
+    spawnSync('git', ['init', '-q'], { cwd: dir });
+    spawnSync('git', ['config', 'user.email', 't@t'], { cwd: dir });
+    spawnSync('git', ['config', 'user.name', 't'], { cwd: dir });
+    writeFileSync(join(dir, file), 'x');
+    return join(dir, file);
+  };
+  const fa = mkrepo('apps/a', 'a.py');
+  const fb = mkrepo('apps/b', 'b.py');
+  const { files } = gitChangedFiles(root, null, [join(root, 'apps/a'), join(root, 'apps/b')]);
+  assert.ok(Array.isArray(files));
+  assert.ok(files.includes(fa), 'change in repo a found');
+  assert.ok(files.includes(fb), 'change in repo b found');
+});
+
+test('gitChangedFiles: no repo anywhere → files null with the run-all note (unchanged floor)', () => {
+  const empty = mkdtempSync(join(tmpdir(), 'testctl-norepo-'));
+  const { files, note } = gitChangedFiles(empty, null, []);
+  assert.equal(files, null);
+  assert.match(note, /not a git repo/);
 });
