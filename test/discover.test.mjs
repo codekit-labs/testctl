@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { discoverTargets } from '../lib/discover.mjs';
@@ -118,6 +118,15 @@ test('Frappe list mixing complete + incomplete yields one target and one notice,
   assert.ok(good.config);
   assert.equal(bad.notice, true);
   assert.equal(bad.config, undefined);
+});
+
+test('discoverTargets: a Frappe app with no config → notice target carrying its dir', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'testctl-frappe-detect-')));
+  writeFileSync(join(root, 'hooks.py'), '# marker');
+  const targets = discoverTargets(root, {});
+  const frappe = targets.find((t) => t.stack === 'frappe' && t.notice);
+  assert.ok(frappe, 'frappe notice present');
+  assert.equal(frappe.dir, root);
 });
 
 test('Frappe single-element list keeps the legacy "frappe" label', () => {

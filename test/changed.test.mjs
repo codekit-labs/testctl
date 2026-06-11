@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { isUnder, selectChangedTargets, gitChangedFiles, gitRepoRoots } from '../lib/changed.mjs';
+import { isUnder, selectChangedTargets, gitChangedFiles, gitRepoRoots, unconfiguredChangedNote } from '../lib/changed.mjs';
 
 test('isUnder: nested file is under dir; sibling/prefix is not', () => {
   assert.equal(isUnder('/a/b/c.js', '/a/b'), true);
@@ -87,4 +87,20 @@ test('gitChangedFiles: no repo anywhere → files null with the run-all note (un
   const { files, note } = gitChangedFiles(empty, null, []);
   assert.equal(files, null);
   assert.match(note, /not a git repo/);
+});
+
+test('unconfiguredChangedNote: changed file under a notice target dir → actionable init note', () => {
+  const targets = [
+    { stack: 'frappe', label: 'frappe', notice: true, dir: '/proj' },
+    { stack: 'flutter', path: '/proj/app' },
+  ];
+  const note = unconfiguredChangedNote(targets, ['/proj/apps/x/foo.py']);
+  assert.match(note, /unconfigured frappe/i);
+  assert.match(note, /testctl init/);
+});
+
+test('unconfiguredChangedNote: no changes / no notice dir / no match → null', () => {
+  assert.equal(unconfiguredChangedNote([{ stack: 'frappe', notice: true, dir: '/proj' }], []), null);
+  assert.equal(unconfiguredChangedNote([{ stack: 'frappe', notice: true }], ['/proj/x']), null);
+  assert.equal(unconfiguredChangedNote([{ stack: 'flutter', path: '/p/app' }], ['/p/app/x']), null);
 });
