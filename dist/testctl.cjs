@@ -10592,6 +10592,12 @@ function classifyFrappeFailure(output) {
   if (mand) {
     return `test bootstrap failed \u2014 a mandatory field is unset when Frappe creates its test masters (${mand[1].trim()}). Seed it via a before_tests hook (run /testctl:frappe-bootstrap to generate one), or make the field non-mandatory on the test site. Not a test failure`;
   }
+  const link = text.match(/Could not find\s+(.+?:\s*_Test [^\n]+)/);
+  if (/LinkValidationError/i.test(text) || link) {
+    const detail = link ? link[1].trim() : (text.match(/LinkValidationError:\s*(.+)/) || [, ""])[1].trim();
+    const suffix = detail ? ` (${detail})` : "";
+    return `test bootstrap failed \u2014 a required master is missing when Frappe creates its test masters${suffix}. Create it via a before_tests hook (run /testctl:frappe-bootstrap to generate one), or add it to the app's test fixtures. Not a test failure`;
+  }
   if (/Site\s+\S+\s+does not exist/i.test(text)) {
     return "site not found \u2014 check `site` in testctl.yaml matches a real bench site";
   }

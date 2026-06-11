@@ -144,6 +144,15 @@ test('classifyFrappeFailure: unrecognised output → null (caller uses generic f
   assert.equal(classifyFrappeFailure(null), null);
 });
 
+test('classifyFrappeFailure: test-bootstrap missing master (LinkValidationError) → actionable, points at skill', () => {
+  const out = 'frappe.exceptions.LinkValidationError: Could not find Default Holiday List: _Test Holiday List';
+  const msg = classifyFrappeFailure(out);
+  assert.match(msg, /required master|test masters/i);
+  assert.match(msg, /_Test Holiday List/);
+  assert.match(msg, /\/testctl:frappe-bootstrap/);
+  assert.doesNotMatch(msg, /allow_tests/i);
+});
+
 test('parseFrappeJUnit extracts failures from testcase failure/error nodes', () => {
   const xml = `<?xml version="1.0"?><testsuites><testsuite tests="2" failures="1" errors="0" skipped="0">
     <testcase classname="TestJob" name="test_ok"></testcase>
