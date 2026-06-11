@@ -11,7 +11,7 @@ import { buildWorkflowYaml, buildGitlabYaml } from '../lib/ci.mjs';
 import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
-import { gitChangedFiles, selectChangedTargets } from '../lib/changed.mjs';
+import { gitChangedFiles, selectChangedTargets, unconfiguredChangedNote } from '../lib/changed.mjs';
 import { toJUnitXml, toSarif, toHtml, toMarkdown } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
@@ -102,9 +102,14 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   let targets = discoverTargets(projectDir, config, only);
 
   if (changed) {
-    const { files, note } = gitChangedFiles(projectDir, changed.ref);
+    const targetDirs = targets
+      .map((t) => (t.path ? resolve(projectDir, t.path) : t.dir ? resolve(t.dir) : (t.config && t.config.benchPath) ? resolve(t.config.benchPath) : null))
+      .filter(Boolean);
+    const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
     if (note) console.log(note);
     if (files) {
+      const nudge = unconfiguredChangedNote(targets, files);
+      if (nudge) console.log(nudge);
       targets = selectChangedTargets(targets, files, projectDir);
       if (targets.length === 0) {
         console.log('No changed apps to test.');

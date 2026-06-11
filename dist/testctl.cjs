@@ -9611,7 +9611,7 @@ function discoverTargets(root, config = {}, onlyStack = null) {
     }
   }
   if (frappeList.length === 0 && hasFrappeMarker(root)) {
-    targets.push({ stack: "frappe", label: "frappe", notice: true, note: "needs benchPath, site, apps in testctl.yaml" });
+    targets.push({ stack: "frappe", label: "frappe", notice: true, dir: root, note: "needs benchPath, site, apps in testctl.yaml" });
   }
   return onlyStack ? targets.filter((t) => t.stack === onlyStack) : targets;
 }
@@ -10022,13 +10022,29 @@ function selectChangedTargets(targets, changedAbsFiles, projectDir) {
     return changedAbsFiles.some((f) => isUnder(f, abs));
   });
 }
-function gitChangedFiles(projectDir, ref = null) {
-  const git = (args) => (0, import_node_child_process2.spawnSync)("git", args, { cwd: projectDir, encoding: "utf8" });
-  const inside = git(["rev-parse", "--is-inside-work-tree"]);
-  if (inside.error || inside.status !== 0 || !/true/.test(inside.stdout || "")) {
-    return { files: null, note: "not a git repo \u2014 running all targets" };
-  }
-  const root = (git(["rev-parse", "--show-toplevel"]).stdout || "").trim() || projectDir;
+function gitToplevel(dir) {
+  const r = (0, import_node_child_process2.spawnSync)("git", ["-C", dir, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+  if (r.error || r.status !== 0) return null;
+  const top = (r.stdout || "").trim();
+  return top ? (0, import_node_path7.resolve)(top) : null;
+}
+function gitRepoRoots(projectDir, targetDirs = [], toplevel = gitToplevel) {
+  const roots = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (d) => {
+    if (d == null) return;
+    const r = toplevel(d);
+    if (r && !seen.has(r)) {
+      seen.add(r);
+      roots.push(r);
+    }
+  };
+  add(projectDir);
+  for (const d of targetDirs) add(d);
+  return roots;
+}
+function changedInRepo(root, ref) {
+  const git = (args) => (0, import_node_child_process2.spawnSync)("git", args, { cwd: root, encoding: "utf8" });
   const set = /* @__PURE__ */ new Set();
   const add = (out) => {
     for (const line of (out || "").split("\n")) {
@@ -10039,7 +10055,27 @@ function gitChangedFiles(projectDir, ref = null) {
   add(git(["diff", "--name-only", "HEAD"]).stdout);
   add(git(["ls-files", "--others", "--exclude-standard"]).stdout);
   if (ref) add(git(["diff", "--name-only", `${ref}...HEAD`]).stdout);
-  return { files: [...set], note: null };
+  return set;
+}
+function gitChangedFiles(projectDir, ref = null, targetDirs = []) {
+  const roots = gitRepoRoots(projectDir, targetDirs);
+  if (roots.length === 0) {
+    return { files: null, note: "not a git repo \u2014 running all targets" };
+  }
+  const all = /* @__PURE__ */ new Set();
+  for (const root of roots) for (const f of changedInRepo(root, ref)) all.add(f);
+  const note = roots.length > 1 ? `scanned ${roots.length} git repos for changes` : null;
+  return { files: [...all], note };
+}
+function unconfiguredChangedNote(targets, changedAbsFiles) {
+  if (!Array.isArray(changedAbsFiles) || changedAbsFiles.length === 0) return null;
+  for (const t of targets) {
+    if (!t.notice || !t.dir) continue;
+    const abs = (0, import_node_path7.resolve)(t.dir);
+    const n = changedAbsFiles.filter((f) => isUnder(f, abs)).length;
+    if (n > 0) return `${n} changed file(s) are in an unconfigured ${t.stack} app \u2014 run testctl init to test it`;
+  }
+  return null;
 }
 
 // lib/export.mjs
@@ -11143,9 +11179,12 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
   if (changed) {
-    const { files, note } = gitChangedFiles(projectDir, changed.ref);
+    const targetDirs = targets.map((t) => t.path ? (0, import_node_path14.resolve)(projectDir, t.path) : t.dir ? (0, import_node_path14.resolve)(t.dir) : t.config && t.config.benchPath ? (0, import_node_path14.resolve)(t.config.benchPath) : null).filter(Boolean);
+    const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
     if (note) console.log(note);
     if (files) {
+      const nudge = unconfiguredChangedNote(targets, files);
+      if (nudge) console.log(nudge);
       targets = selectChangedTargets(targets, files, projectDir);
       if (targets.length === 0) {
         console.log("No changed apps to test.");
