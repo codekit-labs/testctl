@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.40.0] - 2026-06-11
+
+### Changed
+- **`/testctl:frappe-bootstrap` and the Frappe classifier now cover missing test *masters*, not just
+  missing fields.** Frappe's bootstrap can also die with
+  `LinkValidationError: Could not find <Doctype>: _Test <Name>` (e.g. `_Test Holiday List`). The
+  classifier now recognises this variant (previously it fell through to the misleading "no JUnit
+  output (is allow_tests enabled?)") and points at `/testctl:frappe-bootstrap`; the skill now also
+  *creates the minimal missing master* in its idempotent, test-only `before_tests` hook and iterates
+  until the bootstrap clears — so one run drains the whole chain (fields and masters).
+
 ## [1.39.0] - 2026-06-11
 
 ### Fixed / Changed
