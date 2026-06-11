@@ -134,6 +134,7 @@ test('classifyFrappeFailure: test-bootstrap MandatoryError → reports the exact
   assert.match(msg, /mandatory/i);
   assert.match(msg, /default_warehouse_for_sales_return/);
   assert.match(msg, /before_tests/);
+  assert.match(msg, /\/testctl:frappe-bootstrap/);
   assert.doesNotMatch(msg, /allow_tests/i);
 });
 
