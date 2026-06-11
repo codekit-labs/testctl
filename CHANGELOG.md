@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.39.0] - 2026-06-11
+
+### Fixed / Changed
+- **`testctl run --changed` is now multi-repo aware.** It previously checked git only at the project
+  root; on a Frappe bench (each `apps/*` is its own repo) the root often isn't a repo, so `--changed`
+  silently ran **everything** and surfaced unrelated stale failures. It now unions changes across the
+  root repo AND each discovered app's own git repo (`gitToplevel` / `gitRepoRoots`), so it scopes to
+  the app you actually edited and drops unchanged apps. When nothing anywhere is a git repo it still
+  falls back to running all targets.
+- **Actionable nudge for unconfigured stacks.** When `--changed` finds edits inside a detected-but-
+  unconfigured Frappe app (no `testctl.yaml`), testctl now prints "N changed file(s) are in an
+  unconfigured frappe app — run testctl init to test it" instead of silently skipping it.
+
 ## [1.38.0] - 2026-06-11
 
 ### Added

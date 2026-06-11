@@ -193,7 +193,7 @@ hardcoded — it's derived from your code.
 ## Run only what changed
 
 ```bash
-testctl run --changed          # only apps with uncommitted/untracked edits
+testctl run --changed          # only apps with uncommitted/untracked edits (multi-repo aware: scopes to each app's own git repo on a bench/monorepo)
 testctl run --changed=main     # only what this branch changed vs main
 testctl run --quiet            # summary + machine JSON only (no table)
 ```
