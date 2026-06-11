@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.38.0] - 2026-06-11
+
+### Added
+- **`/testctl:frappe-bootstrap`** (skill) — fixes a Frappe test run that aborts *before any test runs*
+  because a mandatory field on an auto-created test master (e.g. `[Company, _Test Company]:
+  default_warehouse_for_sales_return`) has no value. Discovers the blocking mandatory fields and
+  generates an **idempotent, test-only** `before_tests` hook in the app — seeding a sane existing
+  value where possible, relaxing `reqd` in-test only as a fallback — then re-runs until the bootstrap
+  clears. Prod-safe (runs only under `frappe.flags.in_test`), extends an existing `before_tests`
+  instead of clobbering it, and leaves changes uncommitted for review.
+
+### Changed
+- The Frappe runner's `MandatoryError` classification now points at the fix:
+  "…run `/testctl:frappe-bootstrap` to generate one…".
+
 ## [1.37.4] - 2026-06-10
 
 ### Fixed

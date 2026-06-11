@@ -143,6 +143,7 @@ And three more for the rest of the lifecycle:
 /testctl:scaffold              # zero-to-one: set up the test harness for an app that has none
 /testctl:mock-externals        # stub email/SMS/payment/webhooks/HTTP so tests never hit real services
 /testctl:security-guard        # defensive security tests for YOUR app: injection/XSS/access/secrets/SSRF/DoS-resilience
+/testctl:frappe-bootstrap      # unblock Frappe test bootstrap: generate a test-only before_tests hook seeding mandatory fields on auto-created test masters (_Test Company, …); reviewable, never mutates the live site
 ```
 
 > **Testing on restored production data?** Run `/testctl:mock-externals` so tests can't fire real
