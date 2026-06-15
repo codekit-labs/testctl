@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isWebDir, webRunner, webFramework } from '../lib/detect.mjs';
+import { buildWebArgv } from '../lib/runners/web.mjs';
 
 function pkgDir(deps) {
   const d = mkdtempSync(join(tmpdir(), 'testctl-web-detect-'));
@@ -37,4 +38,23 @@ test('webFramework: react / vue / web', () => {
   assert.equal(webFramework(pkgDir({ react: '18', vitest: '1' })), 'react');
   assert.equal(webFramework(pkgDir({ vue: '3', jest: '29' })), 'vue');
   assert.equal(webFramework(pkgDir({ '@testing-library/react': '14', vitest: '1' })), 'react');
+});
+
+test('buildWebArgv: vitest default → vitest run --reporter=json', () => {
+  assert.deepEqual(buildWebArgv({ runner: 'vitest' }), ['npx', 'vitest', 'run', '--reporter=json']);
+});
+test('buildWebArgv: jest default (no runner) → jest --json', () => {
+  assert.deepEqual(buildWebArgv({}), ['npx', 'jest', '--json']);
+});
+test('buildWebArgv: vitest + coverage', () => {
+  assert.deepEqual(buildWebArgv({ runner: 'vitest', coverage: true }),
+    ['npx', 'vitest', 'run', '--reporter=json', '--coverage', '--coverage.reporter=json-summary']);
+});
+test('buildWebArgv: jest + coverage', () => {
+  assert.deepEqual(buildWebArgv({ runner: 'jest', coverage: true }),
+    ['npx', 'jest', '--json', '--coverage', '--coverageReporters=json-summary']);
+});
+test('buildWebArgv: command override (array + string) wins', () => {
+  assert.deepEqual(buildWebArgv({ command: ['pnpm', 'test'] }), ['pnpm', 'test']);
+  assert.deepEqual(buildWebArgv({ command: 'yarn test --json' }), ['yarn', 'test', '--json']);
 });
