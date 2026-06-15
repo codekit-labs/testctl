@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.41.1] - 2026-06-11
+
+### Fixed
+- **The after-coding test offer no longer nags every turn.** It previously offered on every turn that
+  changed a source file (i.e. constantly during active coding). It now fires at most once per 30-minute
+  cooldown (a `.testctl/.last-offer` timestamp), and the Stop-hook loop guard now reads
+  `stop_hook_active` from the hook's stdin JSON (it was checking a never-set env var), preventing any
+  same-turn double-offer. `autoOffer: false` still disables it entirely.
+
 ## [1.41.0] - 2026-06-11
 
 ### Added
