@@ -44,6 +44,8 @@ bundle. You only need, per machine:
 Run `testctl doctor` (or `/testctl:doctor`) any time to check this machine: it reports the Node
 version and which stack tools are installed, and lists the stacks it can test here.
 
+**`testctl preflight`** — Frappe test-readiness check (dev requirements, allow_tests, encryption key, before_tests) with the exact fix for each gap.
+
 ## Updating
 
 When a new version is released, refresh the marketplace and update the plugin:

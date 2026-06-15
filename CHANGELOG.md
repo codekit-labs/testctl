@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.41.0] - 2026-06-11
+
+### Added
+- **`testctl preflight`** — a Frappe test-readiness check that catches the known bootstrap blockers
+  *before* you run, in one shot: dev/test requirements installed, `allow_tests` enabled,
+  `encryption_key` present, and a `before_tests` hook in an app. Each red prints the exact fix
+  (`bench setup requirements --dev`, `set-config allow_tests true`, restore the key,
+  `/testctl:frappe-bootstrap`); exits non-zero on any hard blocker so it can gate CI. `testctl doctor`
+  now points at it when a Frappe stack is configured. Read-only; local benches (remote prints a note).
+
 ## [1.40.0] - 2026-06-11
 
 ### Changed
