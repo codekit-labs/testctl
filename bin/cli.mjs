@@ -28,9 +28,10 @@ import { runFlutter } from '../lib/runners/flutter.mjs';
 import { runElectron } from '../lib/runners/electron.mjs';
 import { runNextjs } from '../lib/runners/nextjs.mjs';
 import { runSupabase } from '../lib/runners/supabase.mjs';
+import { runWeb } from '../lib/runners/web.mjs';
 import { hashApp, appCacheKey, decideCached, loadCache, saveCache } from '../lib/cache.mjs';
 
-const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase'];
+const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase', 'web'];
 
 function cmdInit(projectDir, { ci = false } = {}) {
   const path = join(projectDir, 'testctl.yaml');
@@ -84,6 +85,8 @@ async function runTarget(target, coverage = false) {
     result = runNextjs(target.config || {});
   } else if (target.stack === 'supabase') {
     result = runSupabase({ path: target.path });
+  } else if (target.stack === 'web') {
+    result = runWeb({ path: target.path, coverage, runner: target.runner, command: target.command, label: target.label });
   } else {
     result = makeResult({ stack: target.stack, errored: true, error: `unknown stack ${target.stack}` });
   }
@@ -434,7 +437,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 
