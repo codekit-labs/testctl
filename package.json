@@ -1,8 +1,8 @@
 {
   "name": "testctl",
-  "version": "1.44.0",
-  "description": "Run Frappe, Flutter, Electron, Next.js (Vercel) and Supabase tests with one command and a unified report. Ships as a Claude Code plugin.",
-  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "claude-code", "plugin", "test-runner", "ci"],
+  "version": "1.44.1",
+  "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase and Web (React/Vue via Vitest/Jest) tests with one command and a unified report. Ships as a Claude Code plugin.",
+  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "web", "react", "vue", "vitest", "jest", "claude-code", "plugin", "test-runner", "ci"],
   "license": "MIT",
   "author": "Sammish Thundiyil <sammish.thundiyil@gmail.com>",
   "homepage": "https://github.com/codekit-labs/testctl",
@@ -13,7 +13,8 @@
   "files": ["bin", "lib", "dist", "README.md", "LICENSE"],
   "scripts": {
     "test": "node --test",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "prepublishOnly": "node scripts/build.mjs && node --test"
   },
   "devDependencies": {
     "esbuild": "^0.23.0",

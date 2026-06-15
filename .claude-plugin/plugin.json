@@ -1,7 +1,7 @@
 {
   "name": "testctl",
-  "description": "Run Frappe, Flutter, Electron, Next.js (Vercel) and Supabase tests with one command and a unified report.",
-  "version": "1.44.0",
+  "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase and Web (React/Vue via Vitest/Jest) tests with one command and a unified report.",
+  "version": "1.44.1",
   "author": {
     "name": "Sammish Thundiyil",
     "email": "sammish.thundiyil@gmail.com"
@@ -9,5 +9,5 @@
   "homepage": "https://github.com/codekit-labs/testctl",
   "repository": "https://github.com/codekit-labs/testctl",
   "license": "MIT",
-  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "claude-code", "plugin"]
+  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "web", "react", "vue", "vitest", "jest", "claude-code", "plugin"]
 }

@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.44.1] - 2026-06-15
+
+### Changed
+- Accuracy + packaging: the plugin/npm **description now lists all 6 stacks** (adds Web — React/Vue
+  via Vitest/Jest), keywords gained `web`/`react`/`vue`/`vitest`/`jest`, and a `prepublishOnly` script
+  (build + tests) guards `npm publish` so a published `npx testctl` always ships a fresh, green bundle.
+
 ## [1.44.0] - 2026-06-15
 
 ### Added
