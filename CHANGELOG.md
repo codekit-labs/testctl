@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.42.0] - 2026-06-15
+
+### Changed
+- **`/testctl:frappe-bootstrap` v2 — clears a bench in ~2 iterations instead of ~11.** Learnings from
+  a real restored-prod run baked into the skill: (1) it **front-loads the standard ERPNext `_Test`
+  masters** (Holiday List, Tax Categories, Fiscal Years, `_Test` users) that ERPNext's `test_records`
+  reference but a scan can't find; (2) it discovers **Property-Setter-promoted** mandatory fields
+  (`tabProperty Setter property='reqd' value='1'`) — not just Custom Fields — and relaxes via the
+  correct lever; (3) it prefers **relaxing over pre-creating** company-level fields (the `before_tests`
+  rollback caveat). Still test-only (`frappe.flags.in_test`), idempotent, uncommitted for review. The
+  post-bootstrap outbound-service wall (email/PDF/HTTP) is explicitly handed to `/testctl:mock-externals`.
+
 ## [1.41.1] - 2026-06-11
 
 ### Fixed
