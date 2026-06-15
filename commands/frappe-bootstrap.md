@@ -1,5 +1,5 @@
 ---
-description: Fix a Frappe test run that won't bootstrap — generate a test-only before_tests hook that seeds mandatory fields AND creates missing test masters (_Test Company, _Test Holiday List, …).
+description: Fix a Frappe test run that won't bootstrap — generate a test-only before_tests hook that pre-creates the standard ERPNext _Test masters and flips Property-Setter-promoted mandatory fields in one pass.
 argument-hint: "[app]"
 ---
 
