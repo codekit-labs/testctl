@@ -1,18 +1,35 @@
 #!/usr/bin/env bash
-# Stop hook: when Claude finishes a turn in which SOURCE files changed, OFFER to run the
-# tests (it never runs them itself — it asks). Fires at most once per code-change batch
-# (the marker is consumed). Opt out with `autoOffer: false` in testctl.yaml.
+# Stop hook: when Claude finishes a turn in which SOURCE files changed, OFFER to run the tests
+# (it never runs them itself — it asks). At most once per COOLDOWN window so it doesn't nag every
+# coding turn. Opt out with `autoOffer: false` in testctl.yaml.
 set -euo pipefail
+
+COOLDOWN=1800  # seconds (30 min) between offers
 
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 marker="$proj/.testctl/.pending-tests"
 [ -f "$marker" ] || exit 0
-root="$(cat "$marker" 2>/dev/null || true)"   # plugin root recorded by post-edit
-rm -f "$marker" 2>/dev/null || true
 
-# Opt-out + loop guard.
+input="$(cat 2>/dev/null || true)"           # Stop hook stdin JSON
+root="$(cat "$marker" 2>/dev/null || true)"  # plugin root recorded by post-edit
+rm -f "$marker" 2>/dev/null || true          # consume the marker on every fire
+
+# Opt-out.
 if [ -f "$proj/testctl.yaml" ] && grep -qE 'autoOffer:[[:space:]]*false' "$proj/testctl.yaml"; then exit 0; fi
-if [ "${stop_hook_active:-}" = "true" ]; then exit 0; fi
+
+# Loop guard: Claude Code passes stop_hook_active in the Stop hook's STDIN JSON (not env).
+case "$input" in
+  *'"stop_hook_active":true'*|*'"stop_hook_active": true'*) exit 0 ;;
+esac
+
+# Cooldown: at most one offer per COOLDOWN window (tracked by a timestamp sentinel).
+sentinel="$proj/.testctl/.last-offer"
+if [ -f "$sentinel" ]; then
+  now="$(date +%s 2>/dev/null || echo 0)"
+  ts="$(stat -f %m "$sentinel" 2>/dev/null || stat -c %Y "$sentinel" 2>/dev/null || echo 0)"
+  if [ "$now" -gt 0 ] && [ "$ts" -gt 0 ] && [ "$((now - ts))" -lt "$COOLDOWN" ]; then exit 0; fi
+fi
+: > "$sentinel" 2>/dev/null || true           # stamp the offer time (now)
 
 # Build a RUNNABLE engine command — there is NO global `testctl` binary; the engine is
 # node <plugin-root>/dist/testctl.cjs. Resolve the root from the marker or the env.
@@ -32,7 +49,7 @@ fi
 
 MSG="You changed source files this turn. In ONE short sentence, OFFER (don't run it yourself — ask yes/no) to verify nothing broke by running: ${RUN} — runs only what changed, skipping already-green apps; if anything is red, offer /testctl:fix-failures. IMPORTANT: there is no global \`testctl\` binary — always invoke it via that exact node command (or the slash command), never a bare \`testctl ...\`. If the run reports a stack needs config (e.g. Frappe: 'needs benchPath, site, apps'), there is no testctl.yaml yet — suggest ${INIT} first rather than treating it as a failure. If tests were already run this turn or the user declined, skip the offer."
 
-# JSON-escape the reason (it now contains quotes/backslashes/path separators).
+# JSON-escape the reason (it contains quotes/backslashes/path separators).
 escape_for_json() {
   local s="$1"
   s="${s//\\/\\\\}"
