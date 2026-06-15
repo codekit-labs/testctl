@@ -9469,10 +9469,11 @@ function frappePreflight(inputs = {}) {
     return { ok: true, blockers: 0, checks: [
       {
         id: "configured",
-        label: "Frappe stack configured",
+        label: "No Frappe stack configured",
         ok: true,
         blocking: false,
-        fix: "No Frappe stack in testctl.yaml \u2014 nothing to preflight"
+        info: true,
+        fix: "Nothing to preflight \u2014 run `testctl init` to add a Frappe stack"
       }
     ] };
   }
@@ -9480,9 +9481,10 @@ function frappePreflight(inputs = {}) {
     return { ok: true, blockers: 0, checks: [
       {
         id: "remote",
-        label: "Local bench",
+        label: "Remote (ssh) bench",
         ok: true,
         blocking: false,
+        info: true,
         fix: "Remote (ssh) bench \u2014 run `testctl preflight` on the bench itself"
       }
     ] };
@@ -9526,11 +9528,14 @@ function formatPreflight(report, opts = {}) {
   const site = opts.site || "<site>";
   const lines = ["testctl preflight (Frappe)", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"];
   for (const c of report.checks) {
-    const mark = c.ok ? "\u2713" : c.blocking ? "\u2717" : "\u26A0";
+    const mark = c.info ? "\u2139" : c.ok ? "\u2713" : c.blocking ? "\u2717" : "\u26A0";
     lines.push(`  ${mark} ${c.label}`);
-    if (!c.ok) lines.push(`      \u2192 ${c.fix.replace("<site>", site)}`);
+    if (c.info) lines.push(`      ${c.fix.replace("<site>", site)}`);
+    else if (!c.ok) lines.push(`      \u2192 ${c.fix.replace("<site>", site)}`);
   }
-  lines.push(report.ok ? "Ready to run tests: testctl run frappe" : `${report.blockers} blocker(s) \u2014 fix the \u2717 items above, then: testctl run frappe`);
+  if (!report.checks.every((c) => c.info)) {
+    lines.push(report.ok ? "Ready to run tests: testctl run frappe" : `${report.blockers} blocker(s) \u2014 fix the \u2717 items above, then: testctl run frappe`);
+  }
   return lines.join("\n");
 }
 function frappePointer(config) {

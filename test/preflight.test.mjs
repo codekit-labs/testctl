@@ -62,6 +62,21 @@ test('formatPreflight: all-green shows the ready line', () => {
   assert.match(formatPreflight(r, { site: 's' }), /Ready to run tests/);
 });
 
+test('formatPreflight: not-configured prints an info line, not a ready/blocker line', () => {
+  const out = formatPreflight(frappePreflight({ configured: false }));
+  assert.match(out, /ℹ No Frappe stack configured/);
+  assert.match(out, /testctl init/);
+  assert.doesNotMatch(out, /Ready to run tests/);
+  assert.doesNotMatch(out, /blocker/i);
+  assert.doesNotMatch(out, /✓ Frappe stack configured/); // the old misleading line is gone
+});
+
+test('formatPreflight: remote bench prints an info line, no ready/blocker line', () => {
+  const out = formatPreflight(frappePreflight({ configured: true, remote: true }));
+  assert.match(out, /ℹ Remote \(ssh\) bench/);
+  assert.doesNotMatch(out, /Ready to run tests/);
+});
+
 test('frappePointer: present only when a Frappe stack is configured', () => {
   assert.equal(frappePointer({ stacks: {} }), null);
   assert.match(frappePointer({ stacks: { frappe: { site: 's' } } }), /testctl preflight/);
