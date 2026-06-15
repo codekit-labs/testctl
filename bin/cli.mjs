@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { writeFileSync, existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, resolve, relative } from 'node:path';
 import { loadConfig } from '../lib/config.mjs';
+import { frappePreflight, formatPreflight, frappePointer } from '../lib/preflight.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
 import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
@@ -337,10 +339,46 @@ async function cmdWatch(projectDir, runOnce) {
   return new Promise(() => {}); // keep the process alive until interrupted
 }
 
-function cmdDoctor() {
+function cmdDoctor(projectDir) {
   const report = runDoctor();
   console.log(formatDoctor(report));
+  const ptr = frappePointer(loadConfig(projectDir));
+  if (ptr) console.log('  ℹ ' + ptr);
   return report.node.ok ? 0 : 1;
+}
+
+function cmdPreflight(projectDir) {
+  const config = loadConfig(projectDir);
+  const f = config.stacks.frappe;
+  const frappeList = Array.isArray(f) ? f : (f ? [f] : []);
+  const fc = frappeList[0];
+  let report;
+  if (!fc) {
+    report = frappePreflight({ configured: false });
+  } else if (fc.ssh) {
+    report = frappePreflight({ configured: true, remote: true });
+  } else {
+    const benchPath = fc.benchPath || '';
+    const site = fc.site || '';
+    const apps = Array.isArray(fc.apps) ? fc.apps : [];
+    let siteConfig = {};
+    try { siteConfig = JSON.parse(readFileSync(join(benchPath, 'sites', site, 'site_config.json'), 'utf8')); } catch { siteConfig = {}; }
+    const appsWithBeforeTests = apps.filter((app) => {
+      for (const p of [join(benchPath, 'apps', app, app, 'hooks.py'), join(benchPath, 'apps', app, 'hooks.py')]) {
+        try { if (/^\s*before_tests\s*=/m.test(readFileSync(p, 'utf8'))) return true; } catch { /* try next path */ }
+      }
+      return false;
+    });
+    let devReqsOk = false;
+    try {
+      const proc = spawnSync(join(benchPath, 'env', 'bin', 'python'), ['-c', 'import xmlrunner, coverage'], { encoding: 'utf8' });
+      devReqsOk = !proc.error && proc.status === 0;
+    } catch { devReqsOk = false; }
+    report = frappePreflight({ configured: true, remote: false, devReqsOk, siteConfig, appsWithBeforeTests, apps });
+  }
+  console.log(formatPreflight(report, { site: fc && fc.site ? fc.site : '<site>' }));
+  console.log('Exit code: ' + (report.ok ? 0 : 1));
+  return report.ok ? 0 : 1;
 }
 
 async function main() {
@@ -351,7 +389,8 @@ async function main() {
     const ci = ciArg ? (ciArg.includes('=') ? (ciArg.split('=')[1] || 'github') : 'github') : false;
     return process.exit(cmdInit(projectDir, { ci }));
   }
-  if (cmd === 'doctor') return process.exit(cmdDoctor());
+  if (cmd === 'doctor') return process.exit(cmdDoctor(projectDir));
+  if (cmd === 'preflight') return process.exit(cmdPreflight(projectDir));
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
   if (cmd === 'context') {
@@ -395,7 +434,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 
