@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.43.0] - 2026-06-15
+
+### Changed
+- **`/testctl:mock-externals` gained a concrete Frappe outbound recipe.** Beyond `frappe.sendmail`, it
+  now covers background-job / workflow emails (`send_workflow_action_email`), **PDF rendering**
+  (`attach_print` / `get_pdf` / wkhtmltopdf — which can hit the network), and the integration clients —
+  with two layers: a **session-level guard** (`mute_emails` + stub `attach_print`/`get_pdf`) for
+  outbound fired by code a test doesn't drive (workflows/doc events/hooks), and **per-test mocks** that
+  assert intent. Worked example: the `wkhtmltopdf … HostNotFoundError` workflow-email wall that appears
+  right after `/testctl:frappe-bootstrap` clears.
+
 ## [1.42.0] - 2026-06-15
 
 ### Changed

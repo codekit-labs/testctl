@@ -143,7 +143,7 @@ And three more for the rest of the lifecycle:
 /testctl:test-this             # describe a case in plain English → get the runnable test
 /testctl:snapshot              # golden/snapshot tests for output-heavy code (no hand-written asserts)
 /testctl:scaffold              # zero-to-one: set up the test harness for an app that has none
-/testctl:mock-externals        # stub email/SMS/payment/webhooks/HTTP so tests never hit real services
+/testctl:mock-externals        # stub email/SMS/payment/webhooks/HTTP so tests never hit real services (Frappe: also workflow emails + PDF/wkhtmltopdf)
 /testctl:security-guard        # defensive security tests for YOUR app: injection/XSS/access/secrets/SSRF/DoS-resilience
 /testctl:frappe-bootstrap      # unblock Frappe test bootstrap: generate a test-only before_tests hook that front-loads the standard ERPNext _Test masters and flips Property-Setter-promoted mandatory fields in one pass; reviewable, never mutates the live site
 ```
