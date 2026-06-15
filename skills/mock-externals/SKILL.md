@@ -26,10 +26,9 @@ confirm the list.
 
 2. **Stub them at the test boundary** using the stack's mechanism (NEW test files / setup, never
    overwriting app code):
-   - **Frappe:** patch the sender/integration in the test (e.g. `monkeypatch`/`unittest.mock.patch`
-     of `frappe.sendmail` and the gateway client), or assert it was *called* without it actually
-     firing. For a restored site, also recommend disabling mail/SMS/payment in site config — but the
-     test-level mock is the real guard.
+   - **Frappe:** see the **Frappe outbound recipe** below — it covers `frappe.sendmail`,
+     background-job / workflow emails, PDF rendering (`attach_print`/`get_pdf`/wkhtmltopdf), and the
+     integration clients, with both a session-level guard and per-test intent mocks.
    - **Next.js / Electron / Node:** mock `fetch`/the HTTP client (msw, jest mock, nock-style), or
      inject a fake client; never let a test reach a real URL.
    - **Flutter:** inject a fake client / `http.MockClient`; assert the request was built right
@@ -47,10 +46,57 @@ confirm the list.
 6. **Leave for review.** Do NOT commit. Report the integrations found and stubbed, and any that still
    reach out (so the user can finish them). Tell the user to review `git diff` and commit.
 
+## Frappe outbound recipe
+
+Frappe sends from more places than a single test wraps — workflows, doc events, hooks, and the test
+bootstrap can all fire email/PDF/HTTP. Cover both *what a test drives* and *what fires around it*.
+
+**Surfaces to look for**
+- **Email:** `frappe.sendmail`, Email Account sending, the Email Queue.
+- **Async:** `frappe.enqueue(...)` and background jobs that send — notably
+  `frappe/workflow/doctype/workflow_action/workflow_action.py:send_workflow_action_email`.
+- **PDF:** `frappe.attach_print`, `frappe.utils.pdf.get_pdf`, `pdfkit`/wkhtmltopdf — the HTML it
+  renders may fetch remote images/fonts, so a PDF render can hit the network.
+- **Integrations:** payment gateways, ZATCA / e-invoice / tax-authority submitters, `requests`/HTTP to
+  non-local hosts, webhooks.
+
+**Layer 1 — session-level guard (for outbound a test does NOT drive: workflows, doc events, hooks).**
+Use when an unrelated test trips email/PDF fired by framework code you don't call directly (this is the
+classic `wkhtmltopdf … HostNotFoundError` from a workflow email):
+- Mute mail: `bench --site <site> set-config mute_emails 1` for the test site, or set
+  `frappe.flags.mute_emails = True` in a shared test base / `setUp`.
+- Stub the PDF path so it never invokes wkhtmltopdf:
+  ```python
+  from unittest.mock import patch
+  # in a shared TestCase.setUp (addCleanup to undo):
+  p = patch("frappe.attach_print", return_value={"fname": "x.pdf", "fcontent": b""})
+  p.start(); self.addCleanup(p.stop)
+  # if get_pdf is called directly, also: patch("frappe.utils.pdf.get_pdf", return_value=b"")
+  ```
+
+**Layer 2 — per-test mock (for outbound the test DOES drive; assert intent, not delivery).**
+```python
+from unittest.mock import patch
+with patch("frappe.sendmail") as m:
+    submit_invoice(inv)            # the thing under test
+    m.assert_called_once()
+    assert m.call_args.kwargs["recipients"] == ["customer@example.com"]
+# same shape for the payment / e-invoice client
+```
+
+**Worked example (the avientek wall).** After bootstrap cleared, a `Workflow Action` enqueued
+`send_workflow_action_email` → `frappe.attach_print` → `get_pdf` → wkhtmltopdf, which failed offline
+with `OSError: wkhtmltopdf reported an error … HostNotFoundError`. That is an *outbound* problem, not a
+bootstrap one — fix it with Layer 1 (`mute_emails` + patch `attach_print`), so the workflow's email/PDF
+path is inert during tests. (Bootstrap blockers are `/testctl:frappe-bootstrap`.)
+
 ## Rules
 
 - No test may reach a real external service — email, SMS, payment, e-invoice, or arbitrary HTTP.
 - Stub at the test boundary; never edit app integration code to "make it testable" here.
+- Frappe: for outbound fired by code a test doesn't drive (workflows, doc events, hooks, bootstrap), a
+  session-level guard (`mute_emails` + stubbing `attach_print`/`get_pdf`) is the right tool — it
+  complements, not replaces, per-test intent assertions.
 - Assert the intent (what would have been sent), not real delivery.
 - Especially on restored production data: the mock is the safety net — verify nothing fires for real.
 - Additive; never auto-commit.
