@@ -137,3 +137,21 @@ test('Frappe single-element list keeps the legacy "frappe" label', () => {
   assert.equal(fr[0].label, 'frappe');
   assert.ok(fr[0].config);
 });
+
+test('discoverTargets: react + vitest dir → web target (runner vitest, label react)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'testctl-web-disc-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'ui', devDependencies: { react: '18', vitest: '1' } }));
+  const targets = discoverTargets(root, {});
+  const web = targets.find((t) => t.stack === 'web');
+  assert.ok(web, 'web target present');
+  assert.equal(web.path, root);
+  assert.equal(web.runner, 'vitest');
+  assert.equal(web.label, 'react');
+});
+
+test('discoverTargets: a Next.js dir is NOT also a web target', () => {
+  const root = mkdtempSync(join(tmpdir(), 'testctl-next-disc-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'app', dependencies: { next: '14', react: '18' }, devDependencies: { vitest: '1' } }));
+  const targets = discoverTargets(root, {});
+  assert.equal(targets.some((t) => t.stack === 'web'), false);
+});
