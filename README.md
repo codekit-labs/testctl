@@ -3,8 +3,8 @@
 [![CI](https://github.com/codekit-labs/testctl/actions/workflows/ci.yml/badge.svg)](https://github.com/codekit-labs/testctl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-One command to run **Frappe, Flutter, Electron, Next.js (Vercel), and Supabase** tests and
-get a single unified report with a CI-friendly exit code.
+One command to run **Frappe, Flutter, Electron, Next.js (Vercel), Supabase, and Web (React/Vue
+via Vitest/Jest)** tests and get a single unified report with a CI-friendly exit code.
 
 `testctl` auto-detects which stacks exist in your project, runs only those (each
 independently — a missing stack is skipped, never failed), and merges the results. It ships
@@ -23,6 +23,7 @@ Then, in any project (plugin commands are namespaced by the plugin name):
 ```
 /testctl:test-all              # run every detected stack, analyze failures
 /testctl:test-all nextjs       # run a single stack
+/testctl:test-all web          # run React/Vue tests (Vitest or Jest)
 ```
 
 You can also just ask in plain language — e.g. *"run all the tests for this project"* —
@@ -362,6 +363,7 @@ Exit code is `0` only if every stack that ran passed.
 | Electron | `jest --json` | command overridable |
 | Next.js | HTTP smoke checks vs the live **Vercel** URL | asserts status + optional body text |
 | Supabase | `supabase test db` (pgTAP) | needs `supabase start` (Docker) running |
+| Web (React/Vue) | `vitest run --reporter=json` or `jest --json` | runner auto-detected; reuses jest-JSON parser + coverage |
 
 ## Configuration (`testctl.yaml`)
 

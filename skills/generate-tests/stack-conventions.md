@@ -46,3 +46,15 @@ providers/reducers. Avoid brittle full-UI assertions.
 - **Smoke:** `SELECT has_table('public', 'your_table');` and `SELECT is(... )` that RLS is enabled.
 - **Unit-logic:** `SELECT results_eq(...)` for SQL functions; assert constraints/policies.
 - **Run:** `supabase test db` (needs `supabase start` / Docker running).
+
+## Web (React / Vue) — Vitest or Jest
+
+- **Runner:** detect from package.json — `vitest` (`npx vitest run`) or `jest` (`npx jest`). testctl's
+  `web` stack runs whichever is present and parses the jest-shaped JSON.
+- **React:** `@testing-library/react` — `render(<Cmp/>)`, query by role/text, assert on the DOM; fire
+  events with `@testing-library/user-event`. Co-locate `Cmp.test.tsx`.
+- **Vue:** `@vue/test-utils` — `mount(Cmp, { props })`, assert `wrapper.text()` / `wrapper.find(...)`,
+  `await wrapper.trigger('click')`. Co-locate `Cmp.spec.ts`.
+- **Pure logic:** test composables / hooks / store modules directly (no render) — fastest, most stable.
+- **Network:** never hit real services — mock `fetch`/the client (see `/testctl:mock-externals`).
+- Assert behaviour and rendered output, not implementation details.

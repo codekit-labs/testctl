@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.44.0] - 2026-06-15
+
+### Added
+- **`web` stack — React & Vue tests via Vitest or Jest.** testctl now discovers and runs front-end
+  component/unit suites: a project with `vitest` or `jest` plus a UI framework (`react`/`vue`) is
+  detected as `web`, run with `npx vitest run --reporter=json` (or `npx jest --json`), and reported
+  with the framework as its label. Reuses the jest-JSON parser and `--coverage` summary; `--changed`,
+  `--cache`, and `--coverage` all work. Next.js (HTTP smoke) and Electron are unchanged. The
+  test-authoring skills gained React/Vue (Testing Library / `@vue/test-utils`) conventions.
+
 ## [1.43.0] - 2026-06-15
 
 ### Changed
