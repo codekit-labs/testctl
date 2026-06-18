@@ -96,7 +96,7 @@ const SAMPLE = JSON.stringify({
 
 test('parsePlaywrightJson: counts from stats (flaky counts as passed)', () => {
   const r = parsePlaywrightJson(SAMPLE);
-  assert.equal(r.passed, 3);   // expected
+  assert.equal(r.passed, 4);   // expected(3) + flaky(1)
   assert.equal(r.failed, 2);   // unexpected
   assert.equal(r.skipped, 1);  // skipped
 });
@@ -119,4 +119,14 @@ test('parsePlaywrightJson: throws on unparseable JSON', () => {
 test('parsePlaywrightJson: missing stats → zeros, no throw', () => {
   const r = parsePlaywrightJson(JSON.stringify({ suites: [] }));
   assert.deepEqual(r, { passed: 0, failed: 0, skipped: 0, failures: [] });
+});
+test('parsePlaywrightJson: flaky tests counted as passed (expected + flaky)', () => {
+  // stats: expected=2, flaky=1, unexpected=1, skipped=0 → passed must be 3 (2+1), not 2
+  const r = parsePlaywrightJson(JSON.stringify({
+    stats: { expected: 2, unexpected: 1, skipped: 0, flaky: 1 },
+    suites: [],
+  }));
+  assert.equal(r.passed, 3, 'flaky should be added to passed');
+  assert.equal(r.failed, 1);
+  assert.equal(r.skipped, 0);
 });

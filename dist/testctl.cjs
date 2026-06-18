@@ -11357,7 +11357,7 @@ function parsePlaywrightJson(output) {
   };
   walk2(data.suites);
   return {
-    passed: Number(stats.expected || 0),
+    passed: Number(stats.expected || 0) + Number(stats.flaky || 0),
     failed: Number(stats.unexpected || 0),
     skipped: Number(stats.skipped || 0),
     failures

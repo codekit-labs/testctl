@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.50.1] - 2026-06-18
+
+### Fixed
+- **`e2e` (Playwright)** — `parsePlaywrightJson` now counts flaky tests (failed-then-passed-on-retry,
+  reported by Playwright in `stats.flaky`) as **passed**, so they're no longer dropped from the totals
+  (a run of only-flaky tests previously reported 0/0/0). Counts now reconcile with Playwright's own
+  stats.
+
 ## [1.50.0] - 2026-06-18
 
 ### Added
