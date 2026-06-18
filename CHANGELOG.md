@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.47.1] - 2026-06-18
+
+### Changed
+- **`migration-guard`** — hardened the no-data-left-behind guarantee: documented that the rollback
+  requires `FrappeTestCase` specifically, and that a patch calling `frappe.db.commit()` (as some
+  long-running ERPNext patches do) defeats the rollback — the skill now warns and prefers a disposable
+  test site in that case.
+
 ## [1.47.0] - 2026-06-18
 
 ### Added

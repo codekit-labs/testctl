@@ -18,6 +18,10 @@ Guard Frappe data-patch safety using the migration-guard workflow.
    directly (import `<app>.patches.<path>.<name>` — NEVER `bench migrate`), asserts the invariants
    (idempotency by calling execute() twice; no-crash on empty/null/already-migrated rows; the intended
    transformation when clear, else report it; no collateral data loss), and rolls back via the test.
+   Use `FrappeTestCase` specifically for the transactional rollback — a plain `unittest.TestCase` does
+   not roll back. If the patch calls `frappe.db.commit()` internally (some long-running ERPNext patches
+   do), the rollback is broken and seeded rows persist on the site — warn the user and prefer a
+   disposable test site for such patches.
 
 4. Run to green. A real unsafe patch (not idempotent / crashes / loses data) → report it (skip with a
    reason) for `/testctl:fix-failures`; never rewrite the patch or weaken an assertion to force green.

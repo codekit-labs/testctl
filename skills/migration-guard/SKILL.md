@@ -62,6 +62,11 @@ re-test every historical patch (most are long applied and obsolete).
 
 - NEVER run `bench migrate`. Always call the patch's `execute()` directly inside a `FrappeTestCase` so
   the database change rolls back at teardown.
+- **The rollback guarantee requires `FrappeTestCase` specifically** (it wraps each test in a transaction
+  rolled back at teardown) — not a plain `unittest.TestCase`. If the patch's `execute()` calls
+  `frappe.db.commit()` (some long-running ERPNext patches do), the rollback is defeated and seeded test
+  rows persist on the site — detect this, warn the user, and prefer a disposable/throwaway test site for
+  such patches.
 - Idempotency and no-crash are universal and always asserted. The intended transformation is asserted
   ONLY when the patch's intent is clear from its code — otherwise it is reported, not guessed.
 - Reuse existing masters; never create heavyweight records that trigger framework setup cascades.
