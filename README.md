@@ -157,11 +157,16 @@ And three more for the rest of the lifecycle:
 ```
 /testctl:date-tz-guard         # date/time: no tz off-by-one, DST, boundaries, duration math
 /testctl:api-contract          # API: status codes, response shape, error envelope, auth, pagination
+/testctl:migration-guard       # Frappe data patches: idempotent, no data loss, intended transform (calls execute() directly)
 ```
 
 These guards are universal — each reads your project's own config (tax rates, auth/roles, currency
 precision, timezone, API endpoints) and asserts the invariants, so they protect the high-stakes
 areas (compliance, security, money, dates, APIs) on any stack and in any country.
+
+`migration-guard` is Frappe-specific: it reads your app's own data patches (`patches.txt`) and tests
+each for idempotency, no-crash, the intended transformation, and no collateral data loss — calling
+`execute()` directly in a test (never a destructive `bench migrate`).
 
 ## Run history
 

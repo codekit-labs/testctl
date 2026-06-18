@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.47.0] - 2026-06-18
+
+### Added
+- **`migration-guard` skill** (23rd) — protects Frappe/ERPNext **data patches** from corrupting data.
+  Reads the app's own `patches.txt` + patch modules and, for each, writes a `FrappeTestCase` that seeds
+  representative pre-state, calls the patch's `execute()` **directly** (never a destructive
+  `bench migrate`), and asserts: idempotency (running `execute()` twice is safe), no-crash on
+  real/edge data, the patch's intended transformation (reported when ambiguous, never guessed), and no
+  collateral data loss. A real unsafe patch is reported for `fix-failures`, not rewritten. Frappe-only,
+  `allow_tests`, additive, uncommitted.
+
 ## [1.46.1] - 2026-06-18
 
 ### Changed
