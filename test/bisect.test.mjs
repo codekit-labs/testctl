@@ -52,8 +52,9 @@ test('buildBisectCriterion: --test builds a TESTCTL_JSON-parsing node -e wrapper
 
 test('buildBisectCriterion: --test with no target omits the positional', () => {
   const cmd = buildBisectCriterion({ cliPath: '/x/cli.mjs', target: null, test: 'test_vat' });
-  assert.match(cmd, /run --quiet/);
-  assert.doesNotMatch(cmd, /run null/);
+  // Verify spawnSync receives ["run", "--quiet"] as separate args (not "run --quiet" as a single string)
+  assert.match(cmd, /\\"run\\",\\"--quiet\\"/);
+  assert.doesNotMatch(cmd, /null/);
 });
 
 test('formatBisectResult: shows sha, subject, criterion and both skill pointers', () => {
@@ -67,4 +68,13 @@ test('formatBisectResult: shows sha, subject, criterion and both skill pointers'
   assert.match(out, /the suite went red/);
   assert.match(out, /regression-from-bug/);
   assert.match(out, /fix-failures/);
+});
+
+test('formatBisectResult: null subject falls back to (no subject)', () => {
+  const out = formatBisectResult({
+    firstBad: 'abc1234567890abcdef1234567890abcdef123456',
+    subject: null,
+    criterionLabel: 'suite red',
+  });
+  assert.match(out, /no subject/);
 });
