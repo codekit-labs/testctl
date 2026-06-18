@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.50.0] - 2026-06-18
+
+### Added
+- **7th stack: `e2e`** — `testctl run e2e` discovers and runs end-to-end / user-journey suites:
+  Playwright (`@playwright/test` or a `playwright.config.{ts,js,mjs}`) and Flutter
+  integration tests (`integration_test/` beside `pubspec.yaml`).
+- `parsePlaywrightJson` (pure) maps Playwright's `json`-reporter `stats` to passed/failed/skipped
+  (flaky counts as passed) and walks `suites[]` for per-spec failures.
+- `buildE2eArgv` picks `npx playwright test --reporter=json` or
+  `flutter test integration_test --machine`; `cfg.e2e.command` overrides.
+- e2e coexists with the `web`/`flutter` unit stacks — a project can have both a unit target and an
+  e2e target. Flutter E2E reuses the existing `parseFlutterJson` machine-JSON parser.
+- `--changed` / `--cache` / `digest` / `explain` / CI reports all work for `e2e` automatically (it is
+  a normal discovered target with a `makeResult`). No line coverage for e2e (`coverage: null`).
+
 ## [1.49.1] - 2026-06-18
 
 ### Changed

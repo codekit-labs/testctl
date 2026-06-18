@@ -3,8 +3,8 @@
 [![CI](https://github.com/codekit-labs/testctl/actions/workflows/ci.yml/badge.svg)](https://github.com/codekit-labs/testctl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-One command to run **Frappe, Flutter, Electron, Next.js (Vercel), Supabase, and Web (React/Vue
-via Vitest/Jest)** tests and get a single unified report with a CI-friendly exit code.
+One command to run **Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue
+via Vitest/Jest), and E2E (Playwright / Flutter integration_test)** tests and get a single unified report with a CI-friendly exit code.
 
 `testctl` auto-detects which stacks exist in your project, runs only those (each
 independently — a missing stack is skipped, never failed), and merges the results. It ships
@@ -85,7 +85,11 @@ anti-flaky journey tests that drive the real UI:
 /testctl:e2e flutter                      # Flutter integration_test journeys
 ```
 
-Playwright drives Next.js/React/Vue and Electron; Flutter uses `integration_test`. Every generated
+Playwright drives Next.js/React/Vue and Electron; Flutter uses `integration_test`. Once a Playwright config / `@playwright/test` dep or a Flutter `integration_test/` directory exists,
+`testctl run e2e` discovers and runs the suite as its own target — alongside (not replacing) the unit
+stacks. `cfg.e2e.command` in `testctl.yaml` overrides the default invocation.
+
+Every generated
 test is anti-flaky by construction — role/text locators (never nth-child/pixel), auto-waiting (never
 fixed sleeps), deterministic seeded data, and mocked externals (reuses `/testctl:mock-externals`) — and
 never runs against production. It prints the run command and how to wire it into the CI workflow from
@@ -402,6 +406,7 @@ Exit code is `0` only if every stack that ran passed.
 | Next.js | HTTP smoke checks vs the live **Vercel** URL | asserts status + optional body text |
 | Supabase | `supabase test db` (pgTAP) | needs `supabase start` (Docker) running |
 | Web (React/Vue) | `vitest run --reporter=json` or `jest --json` | runner auto-detected; reuses jest-JSON parser + coverage |
+| E2E (Playwright / Flutter) | `npx playwright test --reporter=json` or `flutter test integration_test --machine` | `testctl run e2e`; discovered separately from unit stacks; no line coverage |
 
 ## Configuration (`testctl.yaml`)
 
