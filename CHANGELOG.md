@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.49.0] - 2026-06-18
+
+### Added
+- **`e2e` skill** (25th) — generates end-to-end / user-journey tests that drive the real UI through
+  complete workflows, across Next.js/React/Vue + Electron (Playwright) and Flutter (`integration_test`).
+  Anti-flaky by construction: role/text locators (never nth-child/pixel), auto-waiting (never fixed
+  sleeps), deterministic seeded+torn-down data, and mocked externals (reuses `mock-externals`). Never
+  runs against production; prints the run command and how to wire it into `testctl init --ci`. A real
+  app bug is reported for `fix-failures`; a flaky journey is hardened, never retried-around. Closes the
+  E2E gap for shipping production apps without a QA team.
+
 ## [1.48.1] - 2026-06-18
 
 ### Changed

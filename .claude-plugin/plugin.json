@@ -1,7 +1,7 @@
 {
   "name": "testctl",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase and Web (React/Vue via Vitest/Jest) tests with one command and a unified report.",
-  "version": "1.48.1",
+  "version": "1.49.0",
   "author": {
     "name": "Sammish Thundiyil",
     "email": "sammish.thundiyil@gmail.com"

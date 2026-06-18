@@ -74,6 +74,23 @@ It writes new test files (never overwriting existing ones), runs them until gree
 them uncommitted for you to review and commit. Frappe tests are only run against a site with
 `allow_tests` enabled.
 
+## End-to-end & user journeys
+
+Unit tests prove functions work; an end-to-end test proves a user can finish the job. Generate
+anti-flaky journey tests that drive the real UI:
+
+```
+/testctl:e2e                              # discover + test the critical journeys
+/testctl:e2e web "sign up then checkout"  # a specific journey, on the web app
+/testctl:e2e flutter                      # Flutter integration_test journeys
+```
+
+Playwright drives Next.js/React/Vue and Electron; Flutter uses `integration_test`. Every generated
+test is anti-flaky by construction — role/text locators (never nth-child/pixel), auto-waiting (never
+fixed sleeps), deterministic seeded data, and mocked externals (reuses `/testctl:mock-externals`) — and
+never runs against production. It prints the run command and how to wire it into the CI workflow from
+`testctl init --ci`. Changes are left uncommitted for review.
+
 ## Fixing failures
 
 When tests are red, let the plugin diagnose and fix them:
