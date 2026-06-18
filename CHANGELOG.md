@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.49.1] - 2026-06-18
+
+### Changed
+- **`e2e`** — hardened safety + anti-flaky guidance: teardown must be registered to run even when a
+  journey fails (`afterEach`/`tearDown`/`finally`, never inline) so a mid-flow failure can't leak
+  seeded data; a positive non-production target check before running (confirm the base URL is a
+  local/dev/test host or stop and ask); and notes to ensure the app is served (Playwright `webServer`)
+  and to set `retries: 0` so flakiness surfaces instead of being silently retried green.
+
 ## [1.49.0] - 2026-06-18
 
 ### Added

@@ -41,6 +41,9 @@ journeys (see Step 1) and confirm the list first.
      Flutter `await tester.pumpAndSettle()`. NEVER `waitForTimeout`/`Future.delayed` as a sync wait.
    - **Deterministic data** — seed exactly what the journey needs via the app's factory/test endpoints
      (reuse `data-factory`) and tear it down; never depend on pre-existing data or test order.
+     **Register teardown so it runs even when the journey fails (`afterEach`/`test.afterEach`, Flutter
+     `tearDown`, or a `finally`) — never inline at the end of the happy path, or a mid-journey failure
+     leaks seeded data and poisons later runs.**
    - **Isolate the world** — stub outbound email/SMS/payment/webhooks/3rd-party HTTP (reuse
      `mock-externals`); a journey must not fire real-world side effects.
    - **Config-driven target** — base URL / app path from config/env, never a hardcoded port or
@@ -51,9 +54,15 @@ journeys (see Step 1) and confirm the list first.
    from `testctl init --ci`. If a journey fails because the app is genuinely broken, that is a REAL
    bug — report it (do not weaken the assertion, do not fix app code here) for `/testctl:fix-failures`.
    If a journey is flaky, HARDEN it (better locator/wait) — never add a retry or sleep to hide it.
+   **Ensure the app is actually served before running (e.g. Playwright `webServer` config to auto-start
+   it), and set `retries: 0` in the generated Playwright config so flakiness surfaces instead of being
+   silently retried green.**
 
 5. **Safety:** NEVER run against production. Drive a local/dev/test target with mocked externals and
-   disposable seeded data. Frappe-backed apps: only an `allow_tests` site.
+   disposable seeded data. Frappe-backed apps: only an `allow_tests` site. **Before running, confirm
+   the resolved base URL/target is a local/dev/test host, not a production domain; if you cannot
+   confirm it is non-production, STOP and ask. (`mock-externals` blocks outbound side effects but NOT
+   writes to a real DB.)**
 
 6. **Leave for review.** Do NOT commit. Report the journeys covered, the run command, and any real bug
    surfaced. Tell the user to review `git diff` and commit.

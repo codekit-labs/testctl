@@ -16,16 +16,23 @@ Generate end-to-end / user-journey tests using the e2e workflow.
 3. Follow the `e2e` skill: generate journeys that drive the UI end to end and assert user-visible
    outcomes. Anti-flaky is mandatory — role/text locators (`getByRole`/`find.text`, NEVER nth/pixel),
    auto-wait (web-first assertions / `pumpAndSettle`, NEVER `waitForTimeout`/`Future.delayed`),
-   deterministic seeded+torn-down data (reuse `data-factory`), mocked externals (reuse
-   `mock-externals`), config-driven base URL. Assert outcomes, not implementation.
+   deterministic seeded+torn-down data (reuse `data-factory`) with **teardown registered in
+   `afterEach`/`tearDown`/`finally` — never inline at the end of the happy path, or a mid-journey
+   failure leaks seeded data and poisons later runs**, mocked externals (reuse `mock-externals`),
+   config-driven base URL. Assert outcomes, not implementation.
 
 4. Run to green via the native command (`npx playwright test`, `flutter test integration_test`); print
-   the command + a note on wiring it into `testctl init --ci`. A genuine app bug → report it for
-   `/testctl:fix-failures` (never weaken the assertion). A flaky journey → harden it (better
-   locator/wait), never add a retry/sleep.
+   the command + a note on wiring it into `testctl init --ci`. **Ensure the app is actually served
+   before running (e.g. Playwright `webServer` config to auto-start it) and set `retries: 0` in the
+   generated Playwright config so flakiness surfaces instead of being silently retried green.** A
+   genuine app bug → report it for `/testctl:fix-failures` (never weaken the assertion). A flaky
+   journey → harden it (better locator/wait), never add a retry/sleep.
 
 5. NEVER run against production — use a local/dev/test target with mocked externals and disposable
-   seeded data; Frappe-backed apps only on an `allow_tests` site.
+   seeded data; Frappe-backed apps only on an `allow_tests` site. **Before running, confirm the
+   resolved base URL/target is a local/dev/test host, not a production domain; if you cannot confirm
+   it is non-production, STOP and ask. (`mock-externals` blocks outbound side effects but NOT writes
+   to a real DB.)**
 
 6. Do NOT commit. Report the journeys covered, the run command, and any real bug surfaced. Tell the
    user to review the `git diff` and commit.
