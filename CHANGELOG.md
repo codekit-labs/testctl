@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.48.0] - 2026-06-18
+
+### Added
+- **`perf-guard` skill** (24th) — protects against performance regressions with DETERMINISTIC
+  resource-count assertions, never flaky wall-clock. Headline check: **no-N+1** — count the expensive
+  calls (DB queries / outbound requests) an operation makes over a small vs larger record set and fail
+  if the count scales with input size. Per stack: Frappe counts `frappe.db.sql`/`get_value`;
+  Next.js/Supabase/Node count ORM/client queries; Flutter/Electron count outbound HTTP/repo calls. A
+  real regression is reported, not optimized. Optional fixed count budget; wall-clock only opt-in and
+  flagged environment-sensitive. Frappe `allow_tests`, additive, uncommitted.
+
 ## [1.47.1] - 2026-06-18
 
 ### Changed
