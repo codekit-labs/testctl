@@ -7,6 +7,7 @@ import { frappePreflight, formatPreflight, frappePointer } from '../lib/prefligh
 import { discoverTargets } from '../lib/discover.mjs';
 import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
+import { saveLastRun, loadLastRun, formatDigest } from '../lib/lastrun.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
 import { buildWorkflowYaml, buildGitlabYaml } from '../lib/ci.mjs';
@@ -226,13 +227,9 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     try { writeFileSync(resolve(projectDir, mdPath), toMarkdown(results)); }
     catch (e) { console.warn(`testctl: could not write markdown report: ${e.message}`); }
   }
-  appendHistory(projectDir, historyEntry(results, new Date().toISOString()));
-  try {
-    const tdir = join(projectDir, '.testctl');
-    if (!existsSync(tdir)) mkdirSync(tdir, { recursive: true });
-    if (!existsSync(join(tdir, '.gitignore'))) writeFileSync(join(tdir, '.gitignore'), '*\n');
-    writeFileSync(join(tdir, 'last-run.json'), JSON.stringify({ ts: new Date().toISOString(), results }));
-  } catch { /* best-effort */ }
+  const ts = new Date().toISOString();
+  appendHistory(projectDir, historyEntry(results, ts));
+  saveLastRun(projectDir, results, ts);
   return code;
 }
 
@@ -245,6 +242,18 @@ function cmdReport(projectDir) {
     text = '';
   }
   console.log(formatHistoryReport(summarize(text)));
+  return 0;
+}
+
+// `testctl digest` — recall the last run's failure digest from .testctl/last-run.json
+// WITHOUT re-running. Read-only, exit 0; prints a TESTCTL_DIGEST json line for tooling.
+function cmdDigest(projectDir) {
+  const record = loadLastRun(projectDir);
+  console.log(formatDigest(record));
+  if (record) {
+    const failures = (record.results || []).flatMap((r) => (r.failures || []).map((f) => ({ stack: r.stack, ...f })));
+    console.log('TESTCTL_DIGEST ' + JSON.stringify({ timestamp: record.timestamp, failures }));
+  }
   return 0;
 }
 
@@ -396,6 +405,7 @@ async function main() {
   if (cmd === 'preflight') return process.exit(cmdPreflight(projectDir));
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
+  if (cmd === 'digest') return process.exit(cmdDigest(projectDir));
   if (cmd === 'context') {
     const a = process.argv[3];
     return process.exit(cmdContext(projectDir, a && STACKS.includes(a) ? a : null));
@@ -437,7 +447,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 

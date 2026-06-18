@@ -14,6 +14,14 @@ test('lastRunRecord: keeps digest fields incl. failures, with timestamp', () => 
   assert.equal(rec.results[0].stack, 'web');
 });
 
+test('lastRunRecord: carries present + coverage (superset for explain/context readers)', () => {
+  const rec = lastRunRecord([R({ present: true, coverage: 81.5 })], 1);
+  assert.equal(rec.results[0].present, true);
+  assert.equal(rec.results[0].coverage, 81.5);
+  // a result with no coverage reported → null, not undefined
+  assert.equal(lastRunRecord([R({})], 1).results[0].coverage, null);
+});
+
 test('formatDigest: all-green footer when nothing failed', () => {
   const out = formatDigest(lastRunRecord([R({})], 1));
   assert.match(out, /green/i);
