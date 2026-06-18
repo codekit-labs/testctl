@@ -9934,6 +9934,35 @@ function loadLastRun(projectDir) {
   }
 }
 
+// lib/bisect.mjs
+function parseFirstBadCommit(gitBisectOutput) {
+  if (typeof gitBisectOutput !== "string" || gitBisectOutput.length === 0) return null;
+  const m = gitBisectOutput.match(/\b([0-9a-f]{7,40}) is the first bad commit\b/);
+  return m ? m[1] : null;
+}
+function buildBisectCriterion({ cliPath, target, test }) {
+  const tgt = target ? ` ${target}` : "";
+  const runArgs = `run${tgt} --quiet`;
+  if (!test) {
+    return `node "${cliPath}"${" " + runArgs}`.replace("  ", " ");
+  }
+  const targetArg = target ? `,${JSON.stringify(target)}` : "";
+  const program = `const{spawnSync}=require("node:child_process");const r=spawnSync("node",[${JSON.stringify(cliPath)},"run"${targetArg},"--quiet"],{encoding:"utf8"});const out=(r.stdout||"")+(r.stderr||"");const line=out.split("\\n").find(l=>l.startsWith("TESTCTL_JSON "));let hit=false;if(line){try{const data=JSON.parse(line.slice("TESTCTL_JSON ".length));const needle=${JSON.stringify(test)};for(const res of (data.results||[])){for(const f of (res.failures||[])){if(typeof f.test==="string"&&f.test.indexOf(needle)!==-1){hit=true;}}}}catch(e){}}process.exit(hit?1:0);`;
+  return `node -e ${JSON.stringify(program)}`;
+}
+function formatBisectResult({ firstBad, subject, criterionLabel }) {
+  return [
+    "testctl bisect \u2014 first bad commit",
+    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    `${firstBad}  ${subject || "(no subject)"}`,
+    `criterion: ${criterionLabel}`,
+    "",
+    "Next:",
+    "  \u2022 /testctl:regression-from-bug \u2014 capture this regression as a permanent failing test",
+    "  \u2022 /testctl:fix-failures        \u2014 drive it back to green"
+  ].join("\n");
+}
+
 // bin/cli.mjs
 var import_node_os8 = require("node:os");
 
@@ -11697,6 +11726,53 @@ function cmdDigest(projectDir) {
   }
   return 0;
 }
+function cmdBisect(projectDir, opts) {
+  const { good, bad, target, test } = opts;
+  const git = (args) => (0, import_node_child_process4.spawnSync)("git", ["-C", projectDir, ...args], { encoding: "utf8" });
+  if (!good) {
+    console.error("Usage: testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]");
+    console.error("  --good is required (the last commit where tests were green).");
+    return 2;
+  }
+  const inside = git(["rev-parse", "--is-inside-work-tree"]);
+  if (inside.error || inside.status !== 0 || (inside.stdout || "").trim() !== "true") {
+    console.error("testctl bisect: not a git repository \u2014 cannot bisect here.");
+    return 2;
+  }
+  const status = git(["status", "--porcelain"]);
+  if ((status.stdout || "").trim() !== "") {
+    console.error("testctl bisect: working tree has uncommitted changes \u2014 commit or stash before bisecting.");
+    return 2;
+  }
+  const branchRef = git(["symbolic-ref", "--quiet", "--short", "HEAD"]);
+  const original = branchRef.status === 0 && (branchRef.stdout || "").trim() ? branchRef.stdout.trim() : (git(["rev-parse", "HEAD"]).stdout || "").trim();
+  const cliPath = process.argv[1];
+  const criterion = buildBisectCriterion({ cliPath, target, test });
+  const criterionLabel = test ? `test "${test}" appeared in failures` : "the suite went red";
+  let firstBad = null;
+  try {
+    const start = git(["bisect", "start", bad, good]);
+    if (start.error || start.status !== 0) {
+      console.error("testctl bisect: `git bisect start` failed.");
+      if (start.stderr) console.error(start.stderr.trim());
+      return 1;
+    }
+    const run = (0, import_node_child_process4.spawnSync)("git", ["-C", projectDir, "bisect", "run", "sh", "-c", criterion], { encoding: "utf8" });
+    const out = (run.stdout || "") + (run.stderr || "");
+    firstBad = parseFirstBadCommit(out);
+  } finally {
+    git(["bisect", "reset"]);
+  }
+  if (!firstBad) {
+    console.error("testctl bisect: could not determine a first bad commit \u2014 check that --good is actually green and --bad is actually red.");
+    console.error(`(restored to ${original})`);
+    return 1;
+  }
+  const subject = (git(["show", "-s", "--format=%s", firstBad]).stdout || "").trim();
+  console.log(formatBisectResult({ firstBad, subject, criterionLabel }));
+  console.log("TESTCTL_BISECT " + JSON.stringify({ firstBad, subject }));
+  return 0;
+}
 function cmdExplain(projectDir) {
   let parsed;
   try {
@@ -11861,6 +11937,26 @@ async function main() {
   if (cmd === "report") return process.exit(cmdReport(projectDir));
   if (cmd === "explain") return process.exit(cmdExplain(projectDir));
   if (cmd === "digest") return process.exit(cmdDigest(projectDir));
+  if (cmd === "bisect") {
+    const rest = process.argv.slice(3);
+    const flag = (name) => {
+      const i = rest.findIndex((a2) => a2 === name || a2.startsWith(name + "="));
+      if (i === -1) return null;
+      const a = rest[i];
+      if (a.includes("=")) return a.split("=").slice(1).join("=") || null;
+      return rest[i + 1] && !rest[i + 1].startsWith("--") ? rest[i + 1] : null;
+    };
+    const good = flag("--good");
+    const bad = flag("--bad") || "HEAD";
+    const test = flag("--test");
+    const flagVals = new Set([good, bad === "HEAD" ? null : bad, test].filter(Boolean));
+    const positional = rest.find((a) => !a.startsWith("--") && !flagVals.has(a)) || null;
+    if (positional && !STACKS.includes(positional) && !(0, import_node_fs17.existsSync)((0, import_node_path17.resolve)(projectDir, positional))) {
+      console.error(`Unknown stack/path "${positional}". Valid stacks: ${STACKS.join(", ")}`);
+      return process.exit(2);
+    }
+    return process.exit(cmdBisect(projectDir, { good, bad, target: positional, test }));
+  }
   if (cmd === "context") {
     const a = process.argv[3];
     return process.exit(cmdContext(projectDir, a && STACKS.includes(a) ? a : null));
@@ -11903,7 +11999,7 @@ async function main() {
     }
     return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl context");
+  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context");
   return process.exit(cmd ? 2 : 0);
 }
 main();

@@ -8,6 +8,7 @@ import { discoverTargets } from '../lib/discover.mjs';
 import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { saveLastRun, loadLastRun, formatDigest } from '../lib/lastrun.mjs';
+import { parseFirstBadCommit, buildBisectCriterion, formatBisectResult } from '../lib/bisect.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
 import { buildWorkflowYaml, buildGitlabYaml } from '../lib/ci.mjs';
@@ -260,6 +261,75 @@ function cmdDigest(projectDir) {
   return 0;
 }
 
+// `testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]`
+// Drives `git bisect run` using `testctl run` as the good/bad oracle to find the commit that
+// turned the suite (or one named test) red. Read-only on app code; always restores the original
+// checkout via `git bisect reset` in a finally. Returns an exit code.
+function cmdBisect(projectDir, opts) {
+  const { good, bad, target, test } = opts;
+  const git = (args) => spawnSync('git', ['-C', projectDir, ...args], { encoding: 'utf8' });
+
+  // usage guard — no git mutation has happened yet
+  if (!good) {
+    console.error('Usage: testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]');
+    console.error('  --good is required (the last commit where tests were green).');
+    return 2;
+  }
+
+  // must be a git repo
+  const inside = git(['rev-parse', '--is-inside-work-tree']);
+  if (inside.error || inside.status !== 0 || (inside.stdout || '').trim() !== 'true') {
+    console.error('testctl bisect: not a git repository — cannot bisect here.');
+    return 2;
+  }
+
+  // refuse on a dirty tree (bisect checks out commits and would clobber/refuse)
+  const status = git(['status', '--porcelain']);
+  if ((status.stdout || '').trim() !== '') {
+    console.error('testctl bisect: working tree has uncommitted changes — commit or stash before bisecting.');
+    return 2;
+  }
+
+  // record where we started, so the finally can confirm where we land
+  const branchRef = git(['symbolic-ref', '--quiet', '--short', 'HEAD']);
+  const original = (branchRef.status === 0 && (branchRef.stdout || '').trim())
+    ? branchRef.stdout.trim()
+    : (git(['rev-parse', 'HEAD']).stdout || '').trim();
+
+  const cliPath = process.argv[1];
+  const criterion = buildBisectCriterion({ cliPath, target, test });
+  const criterionLabel = test
+    ? `test "${test}" appeared in failures`
+    : 'the suite went red';
+
+  let firstBad = null;
+  try {
+    const start = git(['bisect', 'start', bad, good]);
+    if (start.error || start.status !== 0) {
+      console.error('testctl bisect: `git bisect start` failed.');
+      if (start.stderr) console.error(start.stderr.trim());
+      return 1;
+    }
+    // `git bisect run <cmd>` — run via the shell so the criterion command string is parsed as written
+    const run = spawnSync('git', ['-C', projectDir, 'bisect', 'run', 'sh', '-c', criterion], { encoding: 'utf8' });
+    const out = (run.stdout || '') + (run.stderr || '');
+    firstBad = parseFirstBadCommit(out);
+  } finally {
+    git(['bisect', 'reset']); // always restore the original checkout
+  }
+
+  if (!firstBad) {
+    console.error('testctl bisect: could not determine a first bad commit — check that --good is actually green and --bad is actually red.');
+    console.error(`(restored to ${original})`);
+    return 1;
+  }
+
+  const subject = (git(['show', '-s', '--format=%s', firstBad]).stdout || '').trim();
+  console.log(formatBisectResult({ firstBad, subject, criterionLabel }));
+  console.log('TESTCTL_BISECT ' + JSON.stringify({ firstBad, subject }));
+  return 0;
+}
+
 function cmdExplain(projectDir) {
   let parsed;
   try {
@@ -409,6 +479,27 @@ async function main() {
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
   if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
   if (cmd === 'digest') return process.exit(cmdDigest(projectDir));
+  if (cmd === 'bisect') {
+    const rest = process.argv.slice(3);
+    const flag = (name) => {
+      const i = rest.findIndex((a) => a === name || a.startsWith(name + '='));
+      if (i === -1) return null;
+      const a = rest[i];
+      if (a.includes('=')) return a.split('=').slice(1).join('=') || null;
+      return rest[i + 1] && !rest[i + 1].startsWith('--') ? rest[i + 1] : null;
+    };
+    const good = flag('--good');
+    const bad = flag('--bad') || 'HEAD';
+    const test = flag('--test');
+    // positional stack-or-path: first non-flag arg that is not consumed as a flag value
+    const flagVals = new Set([good, bad === 'HEAD' ? null : bad, test].filter(Boolean));
+    const positional = rest.find((a) => !a.startsWith('--') && !flagVals.has(a)) || null;
+    if (positional && !STACKS.includes(positional) && !existsSync(resolve(projectDir, positional))) {
+      console.error(`Unknown stack/path "${positional}". Valid stacks: ${STACKS.join(', ')}`);
+      return process.exit(2);
+    }
+    return process.exit(cmdBisect(projectDir, { good, bad, target: positional, test }));
+  }
   if (cmd === 'context') {
     const a = process.argv[3];
     return process.exit(cmdContext(projectDir, a && STACKS.includes(a) ? a : null));
@@ -450,7 +541,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 
