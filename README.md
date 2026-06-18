@@ -180,6 +180,16 @@ When tests fail, the machine-readable `TESTCTL_JSON` line includes a `failures[]
 the failing test name, file/line, and a trimmed message — so tools (and `/testctl:fix-failures`)
 can diagnose without parsing raw logs. Messages are trimmed and capped to stay small.
 
+Every `run` also persists that digest to `.testctl/last-run.json`. Recall it any time **without
+re-running** — a token-saver when you just need "what failed last time?":
+
+```
+testctl digest         # recall the last run's failures, no re-run
+```
+
+It prints per-stack counts and each failing test + message (exit 0), plus a `TESTCTL_DIGEST` JSON line
+for tooling. Distinct from `--cache` (which skips green re-runs) and `report` (history trends).
+
 ## Work context (extreme token-saver)
 
 ```

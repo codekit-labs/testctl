@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.45.0] - 2026-06-18
+
+### Added
+- **`testctl digest`** — recall the last run's failure digest (per-stack counts + failing test names
+  and messages) from `.testctl/last-run.json` **without re-running**. Every `run` persists its digest
+  there (best-effort, git-ignored); `digest` prints it read-only (exit 0) plus a `TESTCTL_DIGEST` JSON
+  line for tooling. A token-saver: "what failed?" is answered from disk instead of re-spawning the
+  suite. Distinct from `--cache` (skips green re-runs) and `report` (history trends). 8th command.
+
+### Changed
+- Unified the last-run writer: `run` now persists via `lib/lastrun.mjs` (`saveLastRun`) instead of an
+  inline writer. The persisted record carries `present` and `coverage`, so the existing `explain` and
+  `context` readers are unaffected.
+
 ## [1.44.1] - 2026-06-15
 
 ### Changed
