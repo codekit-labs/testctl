@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.51.0] - 2026-06-18
+
+### Added
+- **`testctl bisect`** (9th command) — drives `git bisect run` to find the commit that turned tests
+  red, using `testctl run` itself as the good/bad oracle.
+  `testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]`.
+  `--good` is required; `--bad` defaults to `HEAD`; an optional positional narrows what runs at each
+  step; `--test <substr>` makes the criterion "this failing test name appeared" instead of "the suite
+  went red". Safety-first: refuses on a dirty tree or a non-repo (no git mutation), records the original
+  HEAD, and always runs `git bisect reset` in a `finally` so the checkout is restored on success,
+  no-result, and error alike. Read-only on app code. Prints the first-bad sha + subject, the criterion,
+  pointers to `/testctl:regression-from-bug` and `/testctl:fix-failures`, plus a `TESTCTL_BISECT` line.
+  Pure core (`parseFirstBadCommit`, `buildBisectCriterion`, `formatBisectResult`) in `lib/bisect.mjs`.
+
 ## [1.50.1] - 2026-06-18
 
 ### Fixed

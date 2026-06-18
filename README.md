@@ -222,6 +222,35 @@ testctl digest         # recall the last run's failures, no re-run
 It prints per-stack counts and each failing test + message (exit 0), plus a `TESTCTL_DIGEST` JSON line
 for tooling. Distinct from `--cache` (which skips green re-runs) and `report` (history trends).
 
+## Find the breaking commit (bisect)
+
+When tests are red and you want the commit that broke them, let testctl drive `git bisect`:
+
+```bash
+testctl bisect --good v1.4.0          # last release where tests were green
+testctl bisect --good HEAD~20         # bad defaults to HEAD
+testctl bisect --good main frappe     # only re-run the frappe stack at each step
+testctl bisect --good HEAD~30 --test test_invoice_vat   # bisect one specific regression
+```
+
+At every commit between `--good` and `--bad` (default `HEAD`), testctl re-runs your tests and uses the
+result as git's good/bad oracle — non-zero exit is bad, or with `--test <substr>`, a failing test whose
+name contains the substring is bad. It then reports the first bad commit:
+
+```
+testctl bisect — first bad commit
+─────────────────────────────────
+a1b2c3d  refactor invoice totals
+criterion: the suite went red
+
+Next:
+  • /testctl:regression-from-bug — capture this regression as a permanent failing test
+  • /testctl:fix-failures        — drive it back to green
+```
+
+Safety: bisect refuses to start on a dirty working tree (commit or stash first) and always restores your
+original branch when it finishes — on success, on failure, and on interrupt. It never edits your code.
+
 ## Work context (extreme token-saver)
 
 ```
@@ -392,6 +421,7 @@ The same engine runs as a plain Node CLI (Node >= 20):
 node dist/testctl.cjs init      # scaffold a testctl.yaml
 node dist/testctl.cjs run       # run every detected stack
 node dist/testctl.cjs run frappe
+node dist/testctl.cjs bisect --good v1.4.0   # find the commit that broke tests
 ```
 
 Exit code is `0` only if every stack that ran passed.
