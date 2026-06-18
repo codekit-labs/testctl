@@ -155,3 +155,49 @@ test('discoverTargets: a Next.js dir is NOT also a web target', () => {
   const targets = discoverTargets(root, {});
   assert.equal(targets.some((t) => t.stack === 'web'), false);
 });
+
+test('discover: playwright dir → e2e (playwright) target, coexists with web', () => {
+  const root = mkdtempSync(join(tmpdir(), 'testctl-disc-e2e-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({
+    name: 'app', devDependencies: { react: '18', vitest: '1', '@playwright/test': '1' },
+  }));
+  const targets = discoverTargets(root);
+  const web = targets.find((t) => t.stack === 'web');
+  const e2e = targets.find((t) => t.stack === 'e2e');
+  assert.ok(web, 'web unit target present');
+  assert.ok(e2e, 'e2e target present');
+  assert.equal(e2e.framework, 'playwright');
+  assert.equal(e2e.label, 'e2e (playwright)');
+});
+
+test('discover: flutter integration_test → e2e (flutter) target, coexists with flutter', () => {
+  const root = mkdtempSync(join(tmpdir(), 'testctl-disc-e2eflu-'));
+  writeFileSync(join(root, 'pubspec.yaml'), 'name: app\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n');
+  mkdirSync(join(root, 'integration_test'));
+  const targets = discoverTargets(root);
+  assert.ok(targets.find((t) => t.stack === 'flutter'), 'flutter unit target present');
+  const e2e = targets.find((t) => t.stack === 'e2e');
+  assert.ok(e2e, 'e2e target present');
+  assert.equal(e2e.framework, 'flutter-integration');
+  assert.equal(e2e.label, 'e2e (flutter)');
+});
+
+test('discover: onlyStack=e2e filters to e2e target', () => {
+  const root = mkdtempSync(join(tmpdir(), 'testctl-disc-e2eonly-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({
+    name: 'app', devDependencies: { react: '18', vitest: '1', '@playwright/test': '1' },
+  }));
+  const targets = discoverTargets(root, {}, 'e2e');
+  assert.equal(targets.length, 1);
+  assert.equal(targets[0].stack, 'e2e');
+});
+
+test('discover: cfg.e2e.command override is carried onto the e2e target', () => {
+  const root = mkdtempSync(join(tmpdir(), 'testctl-disc-e2ecfg-'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({
+    name: 'app', devDependencies: { '@playwright/test': '1' },
+  }));
+  const targets = discoverTargets(root, { stacks: { e2e: { command: 'pnpm e2e' } } }, 'e2e');
+  assert.equal(targets.length, 1);
+  assert.equal(targets[0].command, 'pnpm e2e');
+});

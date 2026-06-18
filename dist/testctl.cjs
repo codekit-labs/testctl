@@ -9437,9 +9437,9 @@ var require_fxp = __commonJS({
 });
 
 // bin/cli.mjs
-var import_node_fs16 = require("node:fs");
+var import_node_fs17 = require("node:fs");
 var import_node_child_process4 = require("node:child_process");
-var import_node_path16 = require("node:path");
+var import_node_path17 = require("node:path");
 
 // lib/config.mjs
 var import_node_fs = require("node:fs");
@@ -9599,6 +9599,28 @@ function webFramework(dir) {
   if (deps.vue || deps["@vue/test-utils"]) return "vue";
   return "web";
 }
+function hasPlaywrightConfig(dir) {
+  return (0, import_node_fs2.existsSync)((0, import_node_path2.join)(dir, "playwright.config.ts")) || (0, import_node_fs2.existsSync)((0, import_node_path2.join)(dir, "playwright.config.js")) || (0, import_node_fs2.existsSync)((0, import_node_path2.join)(dir, "playwright.config.mjs"));
+}
+function hasFlutterIntegration(dir) {
+  if (!(0, import_node_fs2.existsSync)((0, import_node_path2.join)(dir, "pubspec.yaml"))) return false;
+  try {
+    return (0, import_node_fs2.statSync)((0, import_node_path2.join)(dir, "integration_test")).isDirectory();
+  } catch {
+    return false;
+  }
+}
+function isE2eDir(dir) {
+  const deps = allDeps(readPkg(dir) || {});
+  if (deps["@playwright/test"] || hasPlaywrightConfig(dir)) return true;
+  return hasFlutterIntegration(dir);
+}
+function e2eFramework(dir) {
+  const deps = allDeps(readPkg(dir) || {});
+  if (deps["@playwright/test"] || hasPlaywrightConfig(dir)) return "playwright";
+  if (hasFlutterIntegration(dir)) return "flutter-integration";
+  return "playwright";
+}
 function hasFrappeMarker(dir, depth = 0) {
   if (depth > 3) return false;
   let entries;
@@ -9652,10 +9674,12 @@ function walk(root, dir, depth, acc) {
   const pathStacks = pathStacksFor(dir);
   const isNext = isNextDir(dir);
   const web = isWebDir(dir);
-  if (pathStacks.length || isNext || web) {
+  const e2e = isE2eDir(dir);
+  if (pathStacks.length || isNext || web || e2e) {
     for (const stack of pathStacks) acc.push({ stack, dir });
     if (isNext) acc.push({ stack: "nextjs", dir });
     if (web) acc.push({ stack: "web", dir, runner: webRunner(dir), framework: webFramework(dir) });
+    if (e2e) acc.push({ stack: "e2e", dir, framework: e2eFramework(dir) });
     return;
   }
   let entries;
@@ -9687,6 +9711,9 @@ function discoverTargets(root, config = {}, onlyStack = null) {
       }
     } else if (f.stack === "web") {
       targets.push({ stack: "web", path: f.dir, label: lbl || f.framework || "web", runner: f.runner });
+    } else if (f.stack === "e2e") {
+      const fwLabel = f.framework === "flutter-integration" ? "flutter" : f.framework;
+      targets.push({ stack: "e2e", path: f.dir, label: lbl ? `${lbl} (e2e ${fwLabel})` : `e2e (${fwLabel})`, framework: f.framework });
     } else {
       targets.push({ stack: f.stack, path: f.dir, label: lbl || f.stack });
     }
@@ -9704,6 +9731,18 @@ function discoverTargets(root, config = {}, onlyStack = null) {
       if (targets[i].stack === "web") targets.splice(i, 1);
     }
     targets.push({ stack: "web", path: cfg.web.path, label: "web", runner: cfg.web.runner || "jest", command: cfg.web.command });
+  }
+  if (cfg.e2e && (cfg.e2e.path || cfg.e2e.command)) {
+    for (let i = targets.length - 1; i >= 0; i--) {
+      if (targets[i].stack === "e2e") targets.splice(i, 1);
+    }
+    targets.push({
+      stack: "e2e",
+      path: cfg.e2e.path || ".",
+      label: "e2e",
+      framework: cfg.e2e.framework || "playwright",
+      command: cfg.e2e.command
+    });
   }
   if (cfg.nextjs && cfg.nextjs.vercelUrl) {
     for (let i = targets.length - 1; i >= 0; i--) {
@@ -9896,7 +9935,7 @@ function loadLastRun(projectDir) {
 }
 
 // bin/cli.mjs
-var import_node_os7 = require("node:os");
+var import_node_os8 = require("node:os");
 
 // lib/init.mjs
 var import_node_fs6 = require("node:fs");
@@ -11270,10 +11309,103 @@ ${proc.stdout || ""}${proc.stderr || ""}`;
   });
 }
 
+// lib/runners/e2e.mjs
+var import_node_fs15 = require("node:fs");
+var import_node_os7 = require("node:os");
+var import_node_path15 = require("node:path");
+function buildE2eArgv(cfg) {
+  if (Array.isArray(cfg.command) && cfg.command.length) return cfg.command;
+  if (typeof cfg.command === "string" && cfg.command.trim()) return cfg.command.trim().split(/\s+/);
+  if (cfg.framework === "flutter-integration") {
+    return ["flutter", "test", "integration_test", "--machine"];
+  }
+  return ["npx", "playwright", "test", "--reporter=json"];
+}
+function parsePlaywrightJson(output) {
+  const firstBrace = output.indexOf("{");
+  const lastBrace = output.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("no JSON object found in Playwright output");
+  }
+  const data = JSON.parse(output.slice(firstBrace, lastBrace + 1));
+  const stats = data.stats || {};
+  const failures = [];
+  const walk2 = (suites) => {
+    for (const suite of suites || []) {
+      for (const spec of suite.specs || []) {
+        if (spec.ok === false) {
+          let message = "";
+          for (const t of spec.tests || []) {
+            for (const res of t.results || []) {
+              if (res.error && res.error.message) {
+                message = res.error.message;
+                break;
+              }
+            }
+            if (message) break;
+          }
+          failures.push({
+            test: spec.title || "unknown test",
+            file: suite.file || null,
+            line: spec.line ?? null,
+            message: (message.split("\n")[0] || "").trim()
+          });
+        }
+      }
+      walk2(suite.suites);
+    }
+  };
+  walk2(data.suites);
+  return {
+    passed: Number(stats.expected || 0),
+    failed: Number(stats.unexpected || 0),
+    skipped: Number(stats.skipped || 0),
+    failures
+  };
+}
+async function runE2e(cfg) {
+  const start = Date.now();
+  const cwd = cfg.path || ".";
+  const framework = cfg.framework || "playwright";
+  const label = cfg.label || "e2e";
+  const [command, ...args] = buildE2eArgv({ framework, command: cfg.command });
+  const proc = await spawnAsync(command, args, { cwd });
+  const logDir = (0, import_node_fs15.mkdtempSync)((0, import_node_path15.join)((0, import_node_os7.tmpdir)(), "testctl-e2e-"));
+  const logPath = (0, import_node_path15.join)(logDir, "e2e.log");
+  let logBuf = `$ ${command} ${args.join(" ")} (cwd: ${cwd})
+${proc.stdout || ""}${proc.stderr || ""}`;
+  if (proc.error && proc.error.code !== "ENOBUFS") {
+    (0, import_node_fs15.writeFileSync)(logPath, logBuf);
+    return makeResult({ stack: "e2e", label, errored: true, error: `failed to run ${command}: ${proc.error.message}`, rawLogPath: logPath });
+  }
+  if (proc.error && proc.error.code === "ENOBUFS") logBuf += "\n[testctl] output truncated at maxBuffer\n";
+  (0, import_node_fs15.writeFileSync)(logPath, logBuf);
+  let counts;
+  try {
+    counts = framework === "flutter-integration" ? parseFlutterJson(proc.stdout || "") : parsePlaywrightJson(proc.stdout || "");
+  } catch (e) {
+    return makeResult({ stack: "e2e", label, errored: true, error: e.message, rawLogPath: logPath });
+  }
+  if (ranButProducedNothing(proc.status, counts)) {
+    return makeResult({ stack: "e2e", label, errored: true, error: `${command} exited ${proc.status} with no test results`, rawLogPath: logPath });
+  }
+  return makeResult({
+    stack: "e2e",
+    label,
+    passed: counts.passed,
+    failed: counts.failed,
+    skipped: counts.skipped,
+    durationMs: Date.now() - start,
+    rawLogPath: logPath,
+    coverage: null,
+    failures: capFailures(counts.failures || [])
+  });
+}
+
 // lib/cache.mjs
 var import_node_crypto = require("node:crypto");
-var import_node_fs15 = require("node:fs");
-var import_node_path15 = require("node:path");
+var import_node_fs16 = require("node:fs");
+var import_node_path16 = require("node:path");
 var SKIP = /* @__PURE__ */ new Set([
   "node_modules",
   ".git",
@@ -11294,28 +11426,28 @@ var SKIP = /* @__PURE__ */ new Set([
 function walkFiles(dir, acc) {
   let entries;
   try {
-    entries = (0, import_node_fs15.readdirSync)(dir, { withFileTypes: true });
+    entries = (0, import_node_fs16.readdirSync)(dir, { withFileTypes: true });
   } catch {
     return;
   }
   for (const e of entries) {
     if (e.name.startsWith(".") || SKIP.has(e.name)) continue;
-    const full = (0, import_node_path15.join)(dir, e.name);
+    const full = (0, import_node_path16.join)(dir, e.name);
     if (e.isDirectory()) walkFiles(full, acc);
     else if (e.isFile()) acc.push(full);
   }
 }
 function hashApp(absPath) {
-  if (!(0, import_node_fs15.existsSync)(absPath)) return null;
+  if (!(0, import_node_fs16.existsSync)(absPath)) return null;
   const files = [];
   walkFiles(absPath, files);
   files.sort();
   const h = (0, import_node_crypto.createHash)("sha1");
   for (const f of files) {
     try {
-      h.update((0, import_node_path15.relative)(absPath, f));
+      h.update((0, import_node_path16.relative)(absPath, f));
       h.update("\0");
-      h.update((0, import_node_fs15.readFileSync)(f));
+      h.update((0, import_node_fs16.readFileSync)(f));
       h.update("\0");
     } catch {
     }
@@ -11330,31 +11462,31 @@ function decideCached(entry, currentHash) {
 }
 function loadCache(projectDir) {
   try {
-    return JSON.parse((0, import_node_fs15.readFileSync)((0, import_node_path15.join)(projectDir, ".testctl", "cache.json"), "utf8")) || {};
+    return JSON.parse((0, import_node_fs16.readFileSync)((0, import_node_path16.join)(projectDir, ".testctl", "cache.json"), "utf8")) || {};
   } catch {
     return {};
   }
 }
 function saveCache(projectDir, cache) {
   try {
-    const tdir = (0, import_node_path15.join)(projectDir, ".testctl");
-    if (!(0, import_node_fs15.existsSync)(tdir)) (0, import_node_fs15.mkdirSync)(tdir, { recursive: true });
-    const gi = (0, import_node_path15.join)(tdir, ".gitignore");
-    if (!(0, import_node_fs15.existsSync)(gi)) (0, import_node_fs15.writeFileSync)(gi, "*\n");
-    (0, import_node_fs15.writeFileSync)((0, import_node_path15.join)(tdir, "cache.json"), JSON.stringify(cache));
+    const tdir = (0, import_node_path16.join)(projectDir, ".testctl");
+    if (!(0, import_node_fs16.existsSync)(tdir)) (0, import_node_fs16.mkdirSync)(tdir, { recursive: true });
+    const gi = (0, import_node_path16.join)(tdir, ".gitignore");
+    if (!(0, import_node_fs16.existsSync)(gi)) (0, import_node_fs16.writeFileSync)(gi, "*\n");
+    (0, import_node_fs16.writeFileSync)((0, import_node_path16.join)(tdir, "cache.json"), JSON.stringify(cache));
   } catch {
   }
 }
 
 // bin/cli.mjs
-var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase", "web"];
+var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase", "web", "e2e"];
 function cmdInit(projectDir, { ci = false } = {}) {
-  const path = (0, import_node_path16.join)(projectDir, "testctl.yaml");
-  if ((0, import_node_fs16.existsSync)(path)) {
+  const path = (0, import_node_path17.join)(projectDir, "testctl.yaml");
+  if ((0, import_node_fs17.existsSync)(path)) {
     console.log("testctl.yaml already exists \u2014 leaving it untouched.");
   } else {
-    const detection = scanProject(projectDir, (0, import_node_os7.homedir)());
-    (0, import_node_fs16.writeFileSync)(path, buildInitYaml(detection));
+    const detection = scanProject(projectDir, (0, import_node_os8.homedir)());
+    (0, import_node_fs17.writeFileSync)(path, buildInitYaml(detection));
     const a = detection.auto;
     console.log(`Created ${path}`);
     console.log(`  auto-detected: ${a.flutter} flutter, ${a.electron} electron, ${a.supabase} supabase, ${detection.nextjs} nextjs`);
@@ -11364,21 +11496,21 @@ function cmdInit(projectDir, { ci = false } = {}) {
     console.log("  Fill any <FILL-ME> values, then run: testctl run");
   }
   if (ci === "gitlab") {
-    const wfPath = (0, import_node_path16.join)(projectDir, ".gitlab-ci.yml");
-    if ((0, import_node_fs16.existsSync)(wfPath)) {
+    const wfPath = (0, import_node_path17.join)(projectDir, ".gitlab-ci.yml");
+    if ((0, import_node_fs17.existsSync)(wfPath)) {
       console.log(".gitlab-ci.yml already exists \u2014 leaving it untouched.");
     } else {
-      (0, import_node_fs16.writeFileSync)(wfPath, buildGitlabYaml());
+      (0, import_node_fs17.writeFileSync)(wfPath, buildGitlabYaml());
       console.log(`Created ${wfPath}`);
     }
   } else if (ci) {
-    const wfDir = (0, import_node_path16.join)(projectDir, ".github", "workflows");
-    const wfPath = (0, import_node_path16.join)(wfDir, "testctl.yml");
-    if ((0, import_node_fs16.existsSync)(wfPath)) {
+    const wfDir = (0, import_node_path17.join)(projectDir, ".github", "workflows");
+    const wfPath = (0, import_node_path17.join)(wfDir, "testctl.yml");
+    if ((0, import_node_fs17.existsSync)(wfPath)) {
       console.log(".github/workflows/testctl.yml already exists \u2014 leaving it untouched.");
     } else {
-      (0, import_node_fs16.mkdirSync)(wfDir, { recursive: true });
-      (0, import_node_fs16.writeFileSync)(wfPath, buildWorkflowYaml());
+      (0, import_node_fs17.mkdirSync)(wfDir, { recursive: true });
+      (0, import_node_fs17.writeFileSync)(wfPath, buildWorkflowYaml());
       console.log(`Created ${wfPath}`);
     }
   }
@@ -11401,6 +11533,8 @@ async function runTarget(target, coverage = false) {
     result = runSupabase({ path: target.path });
   } else if (target.stack === "web") {
     result = runWeb({ path: target.path, coverage, runner: target.runner, command: target.command, label: target.label });
+  } else if (target.stack === "e2e") {
+    result = runE2e({ path: target.path, framework: target.framework, command: target.command, label: target.label });
   } else {
     result = makeResult({ stack: target.stack, errored: true, error: `unknown stack ${target.stack}` });
   }
@@ -11419,7 +11553,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
   if (changed) {
-    const targetDirs = targets.map((t) => t.path ? (0, import_node_path16.resolve)(projectDir, t.path) : t.dir ? (0, import_node_path16.resolve)(t.dir) : t.config && t.config.benchPath ? (0, import_node_path16.resolve)(t.config.benchPath) : null).filter(Boolean);
+    const targetDirs = targets.map((t) => t.path ? (0, import_node_path17.resolve)(projectDir, t.path) : t.dir ? (0, import_node_path17.resolve)(t.dir) : t.config && t.config.benchPath ? (0, import_node_path17.resolve)(t.config.benchPath) : null).filter(Boolean);
     const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
     if (note) console.log(note);
     if (files) {
@@ -11438,7 +11572,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const hashByKey = {};
   const decisions = targets.map((t) => {
     if (useCache && t.path && !t.notice) {
-      const h = hashApp((0, import_node_path16.resolve)(projectDir, t.path));
+      const h = hashApp((0, import_node_path17.resolve)(projectDir, t.path));
       hashByKey[appCacheKey(t)] = h;
       if (decideCached(cacheStore[appCacheKey(t)], h)) return { t, cached: true };
     }
@@ -11512,28 +11646,28 @@ Exit code: ${code}`);
   console.log("TESTCTL_JSON " + JSON.stringify({ results, failedLogs }));
   if (junitPath) {
     try {
-      (0, import_node_fs16.writeFileSync)((0, import_node_path16.resolve)(projectDir, junitPath), toJUnitXml(results));
+      (0, import_node_fs17.writeFileSync)((0, import_node_path17.resolve)(projectDir, junitPath), toJUnitXml(results));
     } catch (e) {
       console.warn(`testctl: could not write junit report: ${e.message}`);
     }
   }
   if (sarifPath) {
     try {
-      (0, import_node_fs16.writeFileSync)((0, import_node_path16.resolve)(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2));
+      (0, import_node_fs17.writeFileSync)((0, import_node_path17.resolve)(projectDir, sarifPath), JSON.stringify(toSarif(results), null, 2));
     } catch (e) {
       console.warn(`testctl: could not write sarif report: ${e.message}`);
     }
   }
   if (htmlPath) {
     try {
-      (0, import_node_fs16.writeFileSync)((0, import_node_path16.resolve)(projectDir, htmlPath), toHtml(results));
+      (0, import_node_fs17.writeFileSync)((0, import_node_path17.resolve)(projectDir, htmlPath), toHtml(results));
     } catch (e) {
       console.warn(`testctl: could not write html report: ${e.message}`);
     }
   }
   if (mdPath) {
     try {
-      (0, import_node_fs16.writeFileSync)((0, import_node_path16.resolve)(projectDir, mdPath), toMarkdown(results));
+      (0, import_node_fs17.writeFileSync)((0, import_node_path17.resolve)(projectDir, mdPath), toMarkdown(results));
     } catch (e) {
       console.warn(`testctl: could not write markdown report: ${e.message}`);
     }
@@ -11544,10 +11678,10 @@ Exit code: ${code}`);
   return code;
 }
 function cmdReport(projectDir) {
-  const path = (0, import_node_path16.join)(projectDir, ".testctl", "history.jsonl");
+  const path = (0, import_node_path17.join)(projectDir, ".testctl", "history.jsonl");
   let text = "";
   try {
-    text = (0, import_node_fs16.readFileSync)(path, "utf8");
+    text = (0, import_node_fs17.readFileSync)(path, "utf8");
   } catch {
     text = "";
   }
@@ -11566,7 +11700,7 @@ function cmdDigest(projectDir) {
 function cmdExplain(projectDir) {
   let parsed;
   try {
-    parsed = JSON.parse((0, import_node_fs16.readFileSync)((0, import_node_path16.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
+    parsed = JSON.parse((0, import_node_fs17.readFileSync)((0, import_node_path17.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
   } catch {
     console.log("No recent run \u2014 run `testctl run` first.");
     return 0;
@@ -11579,13 +11713,13 @@ function walkSrcFiles(dir, acc, depth = 0) {
   if (depth > 6) return;
   let entries;
   try {
-    entries = (0, import_node_fs16.readdirSync)(dir, { withFileTypes: true });
+    entries = (0, import_node_fs17.readdirSync)(dir, { withFileTypes: true });
   } catch {
     return;
   }
   for (const e of entries) {
     if (e.name.startsWith(".") || CTX_SKIP.has(e.name)) continue;
-    const full = (0, import_node_path16.join)(dir, e.name);
+    const full = (0, import_node_path17.join)(dir, e.name);
     if (e.isDirectory()) walkSrcFiles(full, acc, depth + 1);
     else if (e.isFile()) acc.push(full);
   }
@@ -11596,7 +11730,7 @@ function cmdContext(projectDir, only) {
   const targets = discoverTargets(projectDir, config, only).filter((t) => !t.notice);
   const lastByKey = {};
   try {
-    const lr = JSON.parse((0, import_node_fs16.readFileSync)((0, import_node_path16.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
+    const lr = JSON.parse((0, import_node_fs17.readFileSync)((0, import_node_path17.join)(projectDir, ".testctl", "last-run.json"), "utf8"));
     for (const r of lr.results || []) lastByKey[`${r.stack}:${r.label || r.stack}`] = r;
   } catch {
   }
@@ -11612,7 +11746,7 @@ function cmdContext(projectDir, only) {
     app.belowGate = app.coverage != null && t2 != null && app.coverage < t2;
     app.untested = [];
     if (t.path) {
-      const abs = (0, import_node_path16.resolve)(projectDir, t.path);
+      const abs = (0, import_node_path17.resolve)(projectDir, t.path);
       const files = [];
       walkSrcFiles(abs, files);
       const testFiles = files.filter((f) => isTestFile(f));
@@ -11621,7 +11755,7 @@ function cmdContext(projectDir, only) {
       let testText = "";
       for (const tf of testFiles.slice(0, 60)) {
         try {
-          testText += "\n" + (0, import_node_fs16.readFileSync)(tf, "utf8");
+          testText += "\n" + (0, import_node_fs17.readFileSync)(tf, "utf8");
         } catch {
         }
       }
@@ -11631,11 +11765,11 @@ function cmdContext(projectDir, only) {
         if (!lang) continue;
         let txt = "";
         try {
-          txt = (0, import_node_fs16.readFileSync)(sf, "utf8");
+          txt = (0, import_node_fs17.readFileSync)(sf, "utf8");
         } catch {
           continue;
         }
-        for (const s of extractSymbols(txt, lang)) symbols.push({ ...s, file: (0, import_node_path16.relative)(projectDir, sf) });
+        for (const s of extractSymbols(txt, lang)) symbols.push({ ...s, file: (0, import_node_path17.relative)(projectDir, sf) });
       }
       app.untested = untestedSymbols(symbols, testText).slice(0, 40);
     }
@@ -11688,14 +11822,14 @@ function cmdPreflight(projectDir) {
     const apps = Array.isArray(fc.apps) ? fc.apps : [];
     let siteConfig = {};
     try {
-      siteConfig = JSON.parse((0, import_node_fs16.readFileSync)((0, import_node_path16.join)(benchPath, "sites", site, "site_config.json"), "utf8"));
+      siteConfig = JSON.parse((0, import_node_fs17.readFileSync)((0, import_node_path17.join)(benchPath, "sites", site, "site_config.json"), "utf8"));
     } catch {
       siteConfig = {};
     }
     const appsWithBeforeTests = apps.filter((app) => {
-      for (const p of [(0, import_node_path16.join)(benchPath, "apps", app, app, "hooks.py"), (0, import_node_path16.join)(benchPath, "apps", app, "hooks.py")]) {
+      for (const p of [(0, import_node_path17.join)(benchPath, "apps", app, app, "hooks.py"), (0, import_node_path17.join)(benchPath, "apps", app, "hooks.py")]) {
         try {
-          if (/^\s*before_tests\s*=/m.test((0, import_node_fs16.readFileSync)(p, "utf8"))) return true;
+          if (/^\s*before_tests\s*=/m.test((0, import_node_fs17.readFileSync)(p, "utf8"))) return true;
         } catch {
         }
       }
@@ -11703,7 +11837,7 @@ function cmdPreflight(projectDir) {
     });
     let devReqsOk = false;
     try {
-      const proc = (0, import_node_child_process4.spawnSync)((0, import_node_path16.join)(benchPath, "env", "bin", "python"), ["-c", "import xmlrunner, coverage"], { encoding: "utf8" });
+      const proc = (0, import_node_child_process4.spawnSync)((0, import_node_path17.join)(benchPath, "env", "bin", "python"), ["-c", "import xmlrunner, coverage"], { encoding: "utf8" });
       devReqsOk = !proc.error && proc.status === 0;
     } catch {
       devReqsOk = false;
@@ -11769,7 +11903,7 @@ async function main() {
     }
     return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl context");
+  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl context");
   return process.exit(cmd ? 2 : 0);
 }
 main();

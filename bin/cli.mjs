@@ -30,9 +30,10 @@ import { runElectron } from '../lib/runners/electron.mjs';
 import { runNextjs } from '../lib/runners/nextjs.mjs';
 import { runSupabase } from '../lib/runners/supabase.mjs';
 import { runWeb } from '../lib/runners/web.mjs';
+import { runE2e } from '../lib/runners/e2e.mjs';
 import { hashApp, appCacheKey, decideCached, loadCache, saveCache } from '../lib/cache.mjs';
 
-const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase', 'web'];
+const STACKS = ['frappe', 'flutter', 'electron', 'nextjs', 'supabase', 'web', 'e2e'];
 
 function cmdInit(projectDir, { ci = false } = {}) {
   const path = join(projectDir, 'testctl.yaml');
@@ -88,6 +89,8 @@ async function runTarget(target, coverage = false) {
     result = runSupabase({ path: target.path });
   } else if (target.stack === 'web') {
     result = runWeb({ path: target.path, coverage, runner: target.runner, command: target.command, label: target.label });
+  } else if (target.stack === 'e2e') {
+    result = runE2e({ path: target.path, framework: target.framework, command: target.command, label: target.label });
   } else {
     result = makeResult({ stack: target.stack, errored: true, error: `unknown stack ${target.stack}` });
   }
@@ -447,7 +450,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 
