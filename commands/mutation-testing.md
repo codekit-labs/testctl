@@ -23,6 +23,7 @@ Run mutation testing on the current project using the mutation-testing workflow.
 
 5. Frappe: only run against an `allow_tests` site.
 
-6. Safety: mutate one site at a time and always revert; the working tree must end with only new test
-   files, never a mutated source line. Do NOT commit. Print the report + tests written; tell the user
-   to review `git diff` and commit.
+6. Safety: mutate one site at a time and always revert with `git checkout -- <file>` (or `git stash`)
+   — not from memory. If a run errors or is interrupted, restore the original first before anything
+   else. The working tree must end with only new test files, never a mutated source line. Do NOT
+   commit. Print the report + tests written; tell the user to review `git diff` and commit.

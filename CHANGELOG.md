@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.46.1] - 2026-06-18
+
+### Changed
+- **`mutation-testing`** — hardened the revert guarantee: revert is now explicitly `git checkout -- <file>`
+  (deterministic, not memory-dependent), and a new rule covers crash/interrupt recovery — if a run errors
+  or is interrupted before reverting, restore the original first. A mutation must never outlive the step
+  that applied it.
+
 ## [1.46.0] - 2026-06-18
 
 ### Added

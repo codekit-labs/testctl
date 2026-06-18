@@ -38,7 +38,9 @@ list first, then focus on the highest-consequence logic (see Step 2).
    b. Re-run the scoped suite: `node "<skill-base>/../../dist/testctl.cjs" run <same-scope> --quiet`.
       - a test now FAILS → mutant **KILLED** (the suite catches it — good).
       - suite still GREEN → mutant **SURVIVED** (a real gap — record file:line + the mutation).
-   c. **Revert immediately** — restore the file byte-for-byte before touching the next site.
+   c. **Revert immediately** — use `git checkout -- <file>` (or `git stash`) to restore the exact
+      original before touching the next site. Do not re-edit from memory; the git restore is
+      deterministic.
 
    **Mutation catalog** (apply by reading the code; pick mutations that genuinely change behavior):
    - Comparison: `>`↔`>=`, `<`↔`<=`, `==`↔`!=`.
@@ -68,9 +70,12 @@ list first, then focus on the highest-consequence logic (see Step 2).
 
 ## Rules
 
-- **Sacred:** mutate one site at a time; ALWAYS revert to the exact original before the next. After the
-  run, verify the working tree shows only the new test files — never a mutated source line. A mutant
-  must never survive into a commit.
+- **Sacred:** mutate one site at a time; ALWAYS revert to the exact original before the next — use
+  `git checkout -- <file>` (not re-editing from memory). After the run, verify the working tree shows
+  only the new test files — never a mutated source line. A mutant must never survive into a commit.
+- **Crash/interrupt recovery:** if a run errors, the code won't run, or you are interrupted before
+  reverting, recover the original FIRST — `git checkout -- <file>` (or `git stash pop`) — before
+  doing anything else. A mutation must never outlive the step that applied it.
 - Mutating app code is safe on restored production data ONLY because every mutation is reverted
   immediately and never committed — never leave a mutation in place.
 - A killing test must fail on the mutation and pass on the original — verify both directions.
