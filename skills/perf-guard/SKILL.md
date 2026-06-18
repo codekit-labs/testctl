@@ -67,6 +67,13 @@ confirm the list first.
 - The no-N+1 scaling check (count over N vs larger-N) is the headline; a fixed count budget is an
   optional add-on, not a replacement.
 - Reuse existing masters; never create heavyweight records that trigger framework setup cascades.
+- **Verify the counter is real before trusting a green scaling test: confirm `calls(n1) > 0` (it
+  actually fires), and that on a deliberately N+1-shaped call the count DOES scale. A constant count
+  when you expect per-row work means you instrumented the wrong collaborator — the test is vacuous,
+  not passing.**
+- **Reset the counter and seeded state between the n1 and n2 runs** (`FrappeTestCase` rolls back
+  automatically; for Node/Flutter/Electron spies, reset explicitly) so `calls(n2)` reflects only the
+  n2 records.
 - Additive only — new test files; never modify or "optimize" app code. A real regression is reported
   for the user, never silently fixed here, and an assertion is never weakened to force green.
 - Frappe/ERPNext tests run only against an `allow_tests` site; never commit to the user's repos.

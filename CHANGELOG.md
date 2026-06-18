@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.48.1] - 2026-06-18
+
+### Changed
+- **`perf-guard`** — hardened the no-N+1 check against false greens: the skill now verifies the counter
+  actually fires per row (`calls(n1) > 0` and a known-N+1 shape does scale) so a mis-wired counter
+  can't make the scaling test vacuous, and resets counter/seeded state between the n1 and n2 runs so
+  the larger measurement isn't polluted by the smaller one.
+
 ## [1.48.0] - 2026-06-18
 
 ### Added

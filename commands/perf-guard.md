@@ -14,10 +14,14 @@ Guard performance against regressions using the perf-guard workflow.
 3. Follow the `perf-guard` skill: for each hot path write a NEW test (reusing existing masters, never
    heavy creates) that instruments the expensive collaborator to COUNT its calls, runs the operation
    over n1 and a larger n2 record set, and asserts the count does NOT scale with N (constant or
-   fixed-bounded) — an N+1 fails it. What to count: Frappe = `frappe.db.sql`/`get_value` calls;
-   Next.js/Supabase/Node = ORM/client query hook; Flutter/Electron = outbound HTTP/repository calls via
-   a spy. Deterministic counts only — add a wall-clock budget ONLY if the user asks, flagged as
-   environment-sensitive.
+   fixed-bounded) — an N+1 fails it. Before trusting a green result, verify the counter actually fires
+   (`calls(n1) > 0`) and that a deliberately N+1-shaped call does scale — a constant count against
+   per-row work means the wrong collaborator was instrumented and the test is vacuous, not passing.
+   Reset the counter and seeded state between the n1 and n2 runs (`FrappeTestCase` rolls back
+   automatically; Node/Flutter/Electron spies must be reset explicitly). What to count: Frappe =
+   `frappe.db.sql`/`get_value` calls; Next.js/Supabase/Node = ORM/client query hook; Flutter/Electron =
+   outbound HTTP/repository calls via a spy. Deterministic counts only — add a wall-clock budget ONLY
+   if the user asks, flagged as environment-sensitive.
 
 4. Run to green. A real regression (N+1 / unbounded query count) → report it (skip with a reason) for
    the user; never optimize app code here and never weaken an assertion (e.g. raise the budget K) to
