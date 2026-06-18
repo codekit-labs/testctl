@@ -118,10 +118,11 @@ Three skills go beyond "do they pass" to "are they any good":
 /testctl:harden           # add edge cases (nulls, boundaries, error paths) to happy-path-only suites
 /testctl:coverage-boost   # write tests for the exact uncovered lines, to a target %
 /testctl:test-audit       # review tests for quality — find green-but-worthless suites, then fix safely
+/testctl:mutation-testing # prove the tests catch bugs — break the code, find tests that don't fail
 ```
 
 `harden` makes a suite meaner, `coverage-boost` targets the specific gaps from the coverage report,
-and `test-audit` catches tests that pass without asserting anything. All additive, never weaken a
+and `test-audit` catches tests that pass without asserting anything. And `mutation-testing` goes further — it breaks the code on purpose and reports any test suite that doesn't notice, then writes the test that would have caught it. All additive, never weaken a
 test, and leave changes uncommitted for review.
 
 And three more for the rest of the lifecycle:

@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.46.0] - 2026-06-18
+
+### Added
+- **`mutation-testing` skill** (22nd) — proves a suite actually catches bugs. Applies small, surgical
+  mutations to high-value code (comparison/boolean/arithmetic/return/remove-a-guard), re-runs the
+  suite, and reports any mutation that **survives** (no test failed = a real gap), then writes a test
+  that kills each survivor and confirms it fails on the mutation. Dependency-free and agentic — works
+  on every stack incl. Frappe and Flutter. The active complement to `test-audit` (which only reads
+  tests). One mutation at a time, always reverted, never committed.
+
 ## [1.45.0] - 2026-06-18
 
 ### Added
