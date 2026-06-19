@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.52.1] - 2026-06-19
+
+### Changed
+- Housekeeping: `package.json` description + keywords now include the 7th stack (E2E / Playwright /
+  Flutter integration_test); removed dead `.replace` cruft in `buildBisectCriterion`; documented that
+  `bisect --test` scores a commit "good" when the named test is absent or passing.
+
 ## [1.52.0] - 2026-06-19
 
 ### Added

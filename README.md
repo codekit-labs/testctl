@@ -237,6 +237,10 @@ At every commit between `--good` and `--bad` (default `HEAD`), testctl re-runs y
 result as git's good/bad oracle — non-zero exit is bad, or with `--test <substr>`, a failing test whose
 name contains the substring is bad. It then reports the first bad commit:
 
+> **Note:** With `--test`, a commit is scored "good" if the named test is absent (not yet introduced) or
+> passing — so bisect pinpoints the commit that introduced the specific regression, not just the first build
+> failure.
+
 ```
 testctl bisect — first bad commit
 ─────────────────────────────────

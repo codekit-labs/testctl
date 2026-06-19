@@ -9944,7 +9944,7 @@ function buildBisectCriterion({ cliPath, target, test }) {
   const tgt = target ? ` ${target}` : "";
   const runArgs = `run${tgt} --quiet`;
   if (!test) {
-    return `node "${cliPath}"${" " + runArgs}`.replace("  ", " ");
+    return `node "${cliPath}" ${runArgs}`;
   }
   const targetArg = target ? `,${JSON.stringify(target)}` : "";
   const program = `const{spawnSync}=require("node:child_process");const r=spawnSync("node",[${JSON.stringify(cliPath)},"run"${targetArg},"--quiet"],{encoding:"utf8"});const out=(r.stdout||"")+(r.stderr||"");const line=out.split("\\n").find(l=>l.startsWith("TESTCTL_JSON "));let hit=false;if(line){try{const data=JSON.parse(line.slice("TESTCTL_JSON ".length));const needle=${JSON.stringify(test)};for(const res of (data.results||[])){for(const f of (res.failures||[])){if(typeof f.test==="string"&&f.test.indexOf(needle)!==-1){hit=true;}}}}catch(e){}}process.exit(hit?1:0);`;
