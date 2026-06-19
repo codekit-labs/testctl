@@ -229,6 +229,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
         const absChanged = resolve(projectDir, df);
         if (!absChanged.startsWith(tdir + '/') && absChanged !== tdir) continue;
         const rel = absChanged.slice(tdir.length + 1);
+        // NOTE: assumes projectDir == the target's git root (the common case). In a monorepo where each package is its own git repo under projectDir, the changed-line paths may not reconcile and patch coverage degrades gracefully to "no measurable" (never a wrong result).
         for (const key of [absChanged, df, rel, join(tdir, rel)]) {
           if (lc.has(key)) { resolvedRanges.set(key, set); break; }
         }

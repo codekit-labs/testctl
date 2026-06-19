@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseJestJson } from '../../lib/runners/electron.mjs';
+import { parseJestJson, buildElectronArgv } from '../../lib/runners/electron.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const json = readFileSync(join(here, '../fixtures/jest-output.json'), 'utf8');
@@ -38,4 +38,10 @@ test('parseJestJson extracts failures with test name, file, message', () => {
   assert.equal(r.failures[0].test, 'math subtracts');
   assert.equal(r.failures[0].file, 'math.test.js');
   assert.match(r.failures[0].message, /expected 2 received 3/);
+});
+
+test('buildElectronArgv: coverage adds lcov alongside json-summary', () => {
+  const argv = buildElectronArgv({ coverage: true });
+  assert.ok(argv.includes('--coverageReporters=json-summary'), 'keeps json-summary');
+  assert.ok(argv.includes('--coverageReporters=lcov'), 'adds lcov');
 });
