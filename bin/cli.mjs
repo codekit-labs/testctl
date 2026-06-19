@@ -15,7 +15,7 @@ import { buildWorkflowYaml, buildGitlabYaml } from '../lib/ci.mjs';
 import { runDoctor, formatDoctor } from '../lib/doctor.mjs';
 import { makeResult } from '../lib/result.mjs';
 import { formatReport, computeExitCode } from '../lib/report.mjs';
-import { gitChangedFiles, selectChangedTargets, unconfiguredChangedNote } from '../lib/changed.mjs';
+import { gitChangedFiles, selectChangedTargets, unconfiguredChangedNote, gitChangedLineRanges } from '../lib/changed.mjs';
 import { toJUnitXml, toSarif, toHtml, toMarkdown } from '../lib/export.mjs';
 import { shouldRetry } from '../lib/retry.mjs';
 import { groupFailures, formatExplain } from '../lib/explain.mjs';
@@ -23,6 +23,7 @@ import { buildNotifyPayload, postWebhook } from '../lib/notify.mjs';
 import { redactNotifyPayload } from '../lib/redact.mjs';
 import { watchProject } from '../lib/watch.mjs';
 import { applyCoverageGate, resolveThreshold } from '../lib/coverage.mjs';
+import { parseLcovLines, parseDiffRanges, patchCoverage, formatPatchCoverage } from '../lib/diffcov.mjs';
 import { langOf, isTestFile, extractSymbols, untestedSymbols } from '../lib/symbols.mjs';
 import { formatContext } from '../lib/context.mjs';
 import { runFrappe } from '../lib/runners/frappe.mjs';
@@ -100,22 +101,28 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null, changedCoverageMin = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
   if (typeof gate === 'number' && Number.isNaN(gate)) gate = null;
   if (gate != null) coverage = true;
+  let patchGate = changedCoverageMin;
+  if (patchGate == null && config.changedCoverageMin != null) patchGate = Number(config.changedCoverageMin);
+  if (typeof patchGate === 'number' && Number.isNaN(patchGate)) patchGate = null;
+  if (changed && patchGate != null) coverage = true;
   const useCache = cache || config.cache === true;
   if (retries == null) retries = config.retry != null ? Number(config.retry) : 0;
   if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
 
+  let changedDiffText = '';
   if (changed) {
     const targetDirs = targets
       .map((t) => (t.path ? resolve(projectDir, t.path) : t.dir ? resolve(t.dir) : (t.config && t.config.benchPath) ? resolve(t.config.benchPath) : null))
       .filter(Boolean);
     const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
+    changedDiffText = gitChangedLineRanges(projectDir, changed.ref, targetDirs);
     if (note) console.log(note);
     if (files) {
       const nudge = unconfiguredChangedNote(targets, files);
@@ -204,6 +211,37 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const code = computeExitCode(results);
   console.log(`\nExit code: ${code}`);
 
+  let code2 = code;
+  if (changed) {
+    const diffRanges = parseDiffRanges(changedDiffText);
+    const lcovLines = new Map();
+    const resolvedRanges = new Map();
+    for (const d of decisions) {
+      const t = d.t;
+      const tdir = t.path ? resolve(projectDir, t.path) : null;
+      if (!tdir) continue;
+      const lcovPath = join(tdir, 'coverage', 'lcov.info');
+      if (!existsSync(lcovPath)) continue;
+      let lc;
+      try { lc = parseLcovLines(readFileSync(lcovPath, 'utf8')); } catch { continue; }
+      for (const [f, m] of lc) lcovLines.set(f, m);
+      for (const [df, set] of diffRanges) {
+        const absChanged = resolve(projectDir, df);
+        if (!absChanged.startsWith(tdir + '/') && absChanged !== tdir) continue;
+        const rel = absChanged.slice(tdir.length + 1);
+        for (const key of [absChanged, df, rel, join(tdir, rel)]) {
+          if (lc.has(key)) { resolvedRanges.set(key, set); break; }
+        }
+      }
+    }
+    const report = patchCoverage(lcovLines, resolvedRanges);
+    console.log('\n' + formatPatchCoverage(report, patchGate));
+    console.log('TESTCTL_PATCH_COVERAGE ' + JSON.stringify(report));
+    if (patchGate != null && report.overall.pct != null && report.overall.pct < patchGate) {
+      code2 = code2 === 0 ? 1 : code2;
+    }
+  }
+
   if (notifyUrl && code !== 0) {
     const payload = redactNotifyPayload(buildNotifyPayload(results, { project: projectDir.split('/').filter(Boolean).pop() || null }));
     console.log('TESTCTL_NOTIFY ' + JSON.stringify(payload));
@@ -234,7 +272,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const ts = new Date().toISOString();
   appendHistory(projectDir, historyEntry(results, ts));
   saveLastRun(projectDir, results, ts);
-  return code;
+  return code2;
 }
 
 function cmdReport(projectDir) {
@@ -536,12 +574,15 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split('=')[1])) || 0) : null;
     const notifyEntry = rest.find((a) => a.startsWith('--notify='));
     const notifyUrl = notifyEntry ? notifyEntry.split('=').slice(1).join('=') || null : null;
+    const ccmEntry = rest.find((a) => a.startsWith('--changed-coverage-min='));
+    const ccm = ccmEntry ? Number(ccmEntry.split('=')[1]) : null;
+    const changedCoverageMin = ccm != null && !Number.isNaN(ccm) ? ccm : null;
     const watch = rest.includes('--watch');
-    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl, mdPath);
+    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl, mdPath, changedCoverageMin);
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 

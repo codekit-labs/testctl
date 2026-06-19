@@ -48,13 +48,25 @@ test('buildWebArgv: jest default (no runner) → jest --json', () => {
 });
 test('buildWebArgv: vitest + coverage', () => {
   assert.deepEqual(buildWebArgv({ runner: 'vitest', coverage: true }),
-    ['npx', 'vitest', 'run', '--reporter=json', '--coverage', '--coverage.reporter=json-summary']);
+    ['npx', 'vitest', 'run', '--reporter=json', '--coverage', '--coverage.reporter=json-summary', '--coverage.reporter=lcov']);
 });
 test('buildWebArgv: jest + coverage', () => {
   assert.deepEqual(buildWebArgv({ runner: 'jest', coverage: true }),
-    ['npx', 'jest', '--json', '--coverage', '--coverageReporters=json-summary']);
+    ['npx', 'jest', '--json', '--coverage', '--coverageReporters=json-summary', '--coverageReporters=lcov']);
 });
 test('buildWebArgv: command override (array + string) wins', () => {
   assert.deepEqual(buildWebArgv({ command: ['pnpm', 'test'] }), ['pnpm', 'test']);
   assert.deepEqual(buildWebArgv({ command: 'yarn test --json' }), ['yarn', 'test', '--json']);
+});
+
+test('buildWebArgv (jest, coverage) adds the lcov reporter alongside json-summary', () => {
+  const argv = buildWebArgv({ runner: 'jest', coverage: true });
+  assert.ok(argv.includes('--coverageReporters=json-summary'), 'keeps json-summary');
+  assert.ok(argv.includes('--coverageReporters=lcov'), 'adds lcov');
+});
+
+test('buildWebArgv (vitest, coverage) adds the lcov reporter alongside json-summary', () => {
+  const argv = buildWebArgv({ runner: 'vitest', coverage: true });
+  assert.ok(argv.includes('--coverage.reporter=json-summary'), 'keeps json-summary');
+  assert.ok(argv.includes('--coverage.reporter=lcov'), 'adds lcov');
 });

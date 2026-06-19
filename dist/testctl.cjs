@@ -10317,6 +10317,21 @@ function unconfiguredChangedNote(targets, changedAbsFiles) {
   }
   return null;
 }
+function gitChangedLineRanges(projectDir, ref = null, targetDirs = []) {
+  const roots = gitRepoRoots(projectDir, targetDirs);
+  if (roots.length === 0) return "";
+  const git = (root, args) => (0, import_node_child_process2.spawnSync)("git", args, { cwd: root, encoding: "utf8" });
+  let text = "";
+  for (const root of roots) {
+    const wt = git(root, ["diff", "HEAD"]);
+    if (!wt.error && wt.status === 0 && wt.stdout) text += wt.stdout;
+    if (ref) {
+      const r = git(root, ["diff", `${ref}...HEAD`]);
+      if (!r.error && r.status === 0 && r.stdout) text += r.stdout;
+    }
+  }
+  return text;
+}
 
 // lib/export.mjs
 function xmlEscape(s) {
@@ -10632,6 +10647,117 @@ function applyCoverageGate(results, min) {
     }
   }
   return results;
+}
+
+// lib/diffcov.mjs
+function parseLcovLines(text) {
+  const out = /* @__PURE__ */ new Map();
+  if (!text || typeof text !== "string") return out;
+  let cur = null;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("SF:")) {
+      const file = line.slice(3).trim();
+      if (!file) {
+        cur = null;
+        continue;
+      }
+      cur = out.get(file);
+      if (!cur) {
+        cur = /* @__PURE__ */ new Map();
+        out.set(file, cur);
+      }
+    } else if (line.startsWith("DA:") && cur) {
+      const body = line.slice(3);
+      const comma = body.indexOf(",");
+      if (comma < 0) continue;
+      const ln = Number(body.slice(0, comma));
+      const hits = Number(body.slice(comma + 1));
+      if (Number.isFinite(ln) && Number.isFinite(hits)) cur.set(ln, hits);
+    } else if (line === "end_of_record") {
+      cur = null;
+    }
+  }
+  for (const [f, m] of out) if (m.size === 0) out.delete(f);
+  return out;
+}
+function parseDiffRanges(text) {
+  const out = /* @__PURE__ */ new Map();
+  if (!text || typeof text !== "string") return out;
+  let file = null;
+  let newLine = 0;
+  for (const raw of text.split("\n")) {
+    if (raw.startsWith("+++ ")) {
+      const p = raw.slice(4).trim();
+      if (p === "/dev/null") {
+        file = null;
+        continue;
+      }
+      file = p.replace(/^b\//, "");
+      if (!out.has(file)) out.set(file, /* @__PURE__ */ new Set());
+      continue;
+    }
+    if (raw.startsWith("@@")) {
+      const m = raw.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      newLine = m ? Number(m[1]) : 0;
+      continue;
+    }
+    if (file == null || newLine === 0) continue;
+    if (raw.startsWith("+++") || raw.startsWith("---")) continue;
+    if (raw.startsWith("+")) {
+      out.get(file).add(newLine);
+      newLine += 1;
+    } else if (raw.startsWith("-")) {
+    } else if (raw.startsWith(" ") || raw === "") {
+      newLine += 1;
+    }
+  }
+  for (const [f, s] of out) if (s.size === 0) out.delete(f);
+  return out;
+}
+function patchCoverage(lcovLines, diffRanges) {
+  const files = [];
+  let oc = 0, ot = 0;
+  for (const [file, lines] of diffRanges) {
+    const da = lcovLines.get(file);
+    if (!da) continue;
+    let covered = 0, total = 0;
+    const uncovered = [];
+    for (const ln of [...lines].sort((a, b) => a - b)) {
+      if (!da.has(ln)) continue;
+      total += 1;
+      if (da.get(ln) > 0) covered += 1;
+      else uncovered.push(ln);
+    }
+    if (total === 0) continue;
+    files.push({ file, covered, total, pct: Math.round(100 * covered / total), uncovered });
+    oc += covered;
+    ot += total;
+  }
+  return {
+    overall: { covered: oc, total: ot, pct: ot === 0 ? null : Math.round(100 * oc / ot) },
+    files
+  };
+}
+function formatPatchCoverage(report, gateMin = null) {
+  const { overall, files } = report;
+  if (overall.pct == null) {
+    return "Patch coverage: no measurable patch coverage (no executable changed lines or no line coverage).";
+  }
+  const lines = [];
+  lines.push("Patch coverage (changed lines)");
+  lines.push("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+  lines.push(`overall: ${overall.covered}/${overall.total} (${overall.pct}%)`);
+  for (const f of files) {
+    let l = `  ${f.file}: ${f.covered}/${f.total} (${f.pct}%)`;
+    if (f.uncovered.length) l += ` \u2014 uncovered: ${f.uncovered.join(", ")}`;
+    lines.push(l);
+  }
+  if (gateMin != null) {
+    if (overall.pct < gateMin) lines.push(`gate: FAIL \u2014 patch coverage ${overall.pct}% is below min ${gateMin}%`);
+    else lines.push(`gate: PASS \u2014 patch coverage ${overall.pct}% meets min ${gateMin}%`);
+  }
+  return lines.join("\n");
 }
 
 // lib/symbols.mjs
@@ -11098,7 +11224,7 @@ var import_node_path11 = require("node:path");
 function buildElectronArgv(cfg) {
   if (Array.isArray(cfg.command) && cfg.command.length) return cfg.command;
   if (typeof cfg.command === "string" && cfg.command.trim()) return cfg.command.trim().split(/\s+/);
-  return cfg.coverage ? ["npx", "jest", "--json", "--coverage", "--coverageReporters=json-summary"] : ["npx", "jest", "--json"];
+  return cfg.coverage ? ["npx", "jest", "--json", "--coverage", "--coverageReporters=json-summary", "--coverageReporters=lcov"] : ["npx", "jest", "--json"];
 }
 async function runElectron(cfg) {
   const start = Date.now();
@@ -11286,9 +11412,9 @@ function buildWebArgv(cfg) {
   if (Array.isArray(cfg.command) && cfg.command.length) return cfg.command;
   if (typeof cfg.command === "string" && cfg.command.trim()) return cfg.command.trim().split(/\s+/);
   if (cfg.runner === "vitest") {
-    return cfg.coverage ? ["npx", "vitest", "run", "--reporter=json", "--coverage", "--coverage.reporter=json-summary"] : ["npx", "vitest", "run", "--reporter=json"];
+    return cfg.coverage ? ["npx", "vitest", "run", "--reporter=json", "--coverage", "--coverage.reporter=json-summary", "--coverage.reporter=lcov"] : ["npx", "vitest", "run", "--reporter=json"];
   }
-  return cfg.coverage ? ["npx", "jest", "--json", "--coverage", "--coverageReporters=json-summary"] : ["npx", "jest", "--json"];
+  return cfg.coverage ? ["npx", "jest", "--json", "--coverage", "--coverageReporters=json-summary", "--coverageReporters=lcov"] : ["npx", "jest", "--json"];
 }
 async function runWeb(cfg) {
   const start = Date.now();
@@ -11571,19 +11697,25 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null) {
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null, changedCoverageMin = null) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
   if (typeof gate === "number" && Number.isNaN(gate)) gate = null;
   if (gate != null) coverage = true;
+  let patchGate = changedCoverageMin;
+  if (patchGate == null && config.changedCoverageMin != null) patchGate = Number(config.changedCoverageMin);
+  if (typeof patchGate === "number" && Number.isNaN(patchGate)) patchGate = null;
+  if (changed && patchGate != null) coverage = true;
   const useCache = cache || config.cache === true;
   if (retries == null) retries = config.retry != null ? Number(config.retry) : 0;
   if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
+  let changedDiffText = "";
   if (changed) {
     const targetDirs = targets.map((t) => t.path ? (0, import_node_path17.resolve)(projectDir, t.path) : t.dir ? (0, import_node_path17.resolve)(t.dir) : t.config && t.config.benchPath ? (0, import_node_path17.resolve)(t.config.benchPath) : null).filter(Boolean);
     const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
+    changedDiffText = gitChangedLineRanges(projectDir, changed.ref, targetDirs);
     if (note) console.log(note);
     if (files) {
       const nudge = unconfiguredChangedNote(targets, files);
@@ -11665,6 +11797,43 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const code = computeExitCode(results);
   console.log(`
 Exit code: ${code}`);
+  let code2 = code;
+  if (changed) {
+    const diffRanges = parseDiffRanges(changedDiffText);
+    const lcovLines = /* @__PURE__ */ new Map();
+    const resolvedRanges = /* @__PURE__ */ new Map();
+    for (const d of decisions) {
+      const t = d.t;
+      const tdir = t.path ? (0, import_node_path17.resolve)(projectDir, t.path) : null;
+      if (!tdir) continue;
+      const lcovPath = (0, import_node_path17.join)(tdir, "coverage", "lcov.info");
+      if (!(0, import_node_fs17.existsSync)(lcovPath)) continue;
+      let lc;
+      try {
+        lc = parseLcovLines((0, import_node_fs17.readFileSync)(lcovPath, "utf8"));
+      } catch {
+        continue;
+      }
+      for (const [f, m] of lc) lcovLines.set(f, m);
+      for (const [df, set] of diffRanges) {
+        const absChanged = (0, import_node_path17.resolve)(projectDir, df);
+        if (!absChanged.startsWith(tdir + "/") && absChanged !== tdir) continue;
+        const rel = absChanged.slice(tdir.length + 1);
+        for (const key of [absChanged, df, rel, (0, import_node_path17.join)(tdir, rel)]) {
+          if (lc.has(key)) {
+            resolvedRanges.set(key, set);
+            break;
+          }
+        }
+      }
+    }
+    const report = patchCoverage(lcovLines, resolvedRanges);
+    console.log("\n" + formatPatchCoverage(report, patchGate));
+    console.log("TESTCTL_PATCH_COVERAGE " + JSON.stringify(report));
+    if (patchGate != null && report.overall.pct != null && report.overall.pct < patchGate) {
+      code2 = code2 === 0 ? 1 : code2;
+    }
+  }
   if (notifyUrl && code !== 0) {
     const payload = redactNotifyPayload(buildNotifyPayload(results, { project: projectDir.split("/").filter(Boolean).pop() || null }));
     console.log("TESTCTL_NOTIFY " + JSON.stringify(payload));
@@ -11704,7 +11873,7 @@ Exit code: ${code}`);
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   appendHistory(projectDir, historyEntry(results, ts));
   saveLastRun(projectDir, results, ts);
-  return code;
+  return code2;
 }
 function cmdReport(projectDir) {
   const path = (0, import_node_path17.join)(projectDir, ".testctl", "history.jsonl");
@@ -11991,15 +12160,18 @@ async function main() {
     const retries = retryEntry ? Math.max(0, Math.floor(Number(retryEntry.split("=")[1])) || 0) : null;
     const notifyEntry = rest.find((a) => a.startsWith("--notify="));
     const notifyUrl = notifyEntry ? notifyEntry.split("=").slice(1).join("=") || null : null;
+    const ccmEntry = rest.find((a) => a.startsWith("--changed-coverage-min="));
+    const ccm = ccmEntry ? Number(ccmEntry.split("=")[1]) : null;
+    const changedCoverageMin = ccm != null && !Number.isNaN(ccm) ? ccm : null;
     const watch2 = rest.includes("--watch");
-    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl, mdPath);
+    const runOnce = () => cmdRun(projectDir, only, coverage, concurrency, minCoverage, changed, quiet, cache, junitPath, sarifPath, retries, htmlPath, notifyUrl, mdPath, changedCoverageMin);
     if (watch2) {
       await cmdWatch(projectDir, runOnce);
       return;
     }
     return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context");
+  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context");
   return process.exit(cmd ? 2 : 0);
 }
 main();
