@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.52.0] - 2026-06-19
+
+### Added
+- **Patch coverage on `--changed`** — `testctl run --changed` now reports *patch coverage*: of the lines
+  your diff added/modified, what fraction tests exercise. Prints a `Patch coverage (changed lines)` block
+  (overall + per-file covered/total/pct + the uncovered changed line numbers) and a
+  `TESTCTL_PATCH_COVERAGE` JSON line for tooling.
+- **`--changed-coverage-min=N` gate** (or `changedCoverageMin` in `testctl.yaml`) — when set, a run whose
+  overall patch coverage is below N exits non-zero. Distinct from and independent of the whole-app
+  `--min-coverage` gate. Report-only by default.
+- New pure core `lib/diffcov.mjs` (`parseLcovLines` / `parseDiffRanges` / `patchCoverage` /
+  `formatPatchCoverage`) and the thin I/O wrapper `gitChangedLineRanges` in `lib/changed.mjs`.
+
+### Changed
+- Web (Vitest/Jest) and Electron (Jest) runners now emit `coverage/lcov.info` alongside the existing
+  `coverage-summary.json` when coverage is on (the `lcov` reporter is added; whole-app behavior unchanged).
+- Flutter already wrote `coverage/lcov.info`; Frappe (XML-only coverage) reports "no line coverage" for
+  patch coverage and is never failed on its absence.
+
+### Notes
+- Patch coverage counts only executable (lcov `DA:`) changed lines — comment/blank/import-only edits don't
+  skew the metric. When nothing is measurable, testctl prints "no measurable patch coverage" and the exit
+  code is unchanged (never crashes, never fails on absence).
+
 ## [1.51.0] - 2026-06-18
 
 ### Added

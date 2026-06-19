@@ -276,6 +276,31 @@ testctl run --quiet            # summary + machine JSON only (no table)
 Next.js always run (their sources aren't locally path-mapped), and outside a git repo it runs
 everything. `--quiet` keeps output minimal — the skills use it to spend fewer tokens.
 
+### Patch coverage (are the lines you changed tested?)
+
+Pair `--changed` with `--coverage` (or the gate below) and testctl reports **patch coverage** — of the
+lines your diff added or modified, what fraction your tests exercise. This is the PR-quality signal that
+whole-app coverage hides: you can add untested code while the project % barely moves.
+
+```bash
+testctl run --changed --coverage              # report patch coverage for the changed apps
+testctl run --changed --changed-coverage-min=80   # fail if patch coverage of the diff is below 80%
+```
+
+```
+Patch coverage (changed lines)
+──────────────────────────────
+overall: 7/9 (78%)
+  src/invoice.js: 5/6 (83%) — uncovered: 42
+  src/tax.js: 2/3 (67%) — uncovered: 18, 19
+gate: FAIL — patch coverage 78% is below min 80%
+```
+
+`--changed-coverage-min` is independent of the whole-app `--min-coverage` gate. Comment/blank/import-only
+diffs don't count (only executable lines do). Flutter, Web (Vitest/Jest) and Electron emit the per-line
+coverage this needs; Frappe coverage is XML-only, so a Frappe target is reported "no line coverage" and
+never fails the gate.
+
 ## Watch mode
 
 ```bash
@@ -375,6 +400,7 @@ testctl run --min-coverage=70        # fail any app below 70% line coverage
 
 ```yaml
 coverageMin: 70
+changedCoverageMin: 80  # fail --changed runs whose patch coverage is below this
 stacks:
   # ...
 ```
@@ -402,6 +428,9 @@ re-measures, and (within 3 rounds) either lifts it over the gate or reports it a
 the real coverage numbers. Without a gate, `production-ready` only generates tests for apps that
 have none.
 
+For per-PR signal rather than whole-app %, see **Patch coverage** under *Run only what changed* — it
+measures coverage of just the lines your diff changed and can gate with `--changed-coverage-min=N`.
+
 ## Parallel runs
 
 Apps run concurrently by default (up to 4 at once). Tune it:
@@ -421,6 +450,7 @@ The same engine runs as a plain Node CLI (Node >= 20):
 node dist/testctl.cjs init      # scaffold a testctl.yaml
 node dist/testctl.cjs run       # run every detected stack
 node dist/testctl.cjs run frappe
+node dist/testctl.cjs run --changed --changed-coverage-min=80   # patch coverage gate on diff
 node dist/testctl.cjs bisect --good v1.4.0   # find the commit that broke tests
 ```
 
