@@ -14,14 +14,16 @@ as a **Claude Code plugin**, so failures are explained inline.
 
 ## Install
 
+Three ways to use testctl — pick whichever fits:
+
+**1. npm — the CLI (any project, no Claude Code needed)**
+
 ```
-npx testctl doctor      # run instantly, no install
-npm i -g testctl        # or install the CLI globally
+npx testctl doctor        # run instantly — nothing to install
+npm i -g testctl          # or install globally, then just: testctl run
 ```
 
-testctl also ships as a **Claude Code plugin** and an **MCP server** (see below).
-
-## Install (Claude Code plugin)
+**2. Claude Code plugin — the 28 AI skills + slash commands**
 
 ```
 /plugin marketplace add codekit-labs/testctl
@@ -41,6 +43,30 @@ You can also just ask in plain language — e.g. *"run all the tests for this pr
 and the bundled skill handles it. The engine is bundled and dependency-free — nothing to
 `npm install`.
 
+**3. MCP server — drive testctl from any AI agent (Cursor, Windsurf, Claude Desktop, custom agents)**
+
+Point your MCP client at the bundled stdio server (exposes `testctl_run` / `testctl_digest` / `testctl_context`):
+
+```json
+{ "command": "node",
+  "args": ["node_modules/testctl/dist/testctl-mcp.cjs"],
+  "env": { "TESTCTL_PROJECT_DIR": "/path/to/your/project" } }
+```
+
+The Claude Code plugin registers this MCP server automatically — no extra config there.
+
+## Update
+
+**npm:** `npm i -g testctl@latest`  (or always run the newest with `npx testctl@latest`)
+
+**Claude Code plugin:**
+
+```
+/plugin marketplace update testctl
+/plugin update testctl
+/reload-plugins
+```
+
 ## Requirements
 
 The plugin works on any machine — it installs from GitHub and the engine is a self-contained
@@ -57,19 +83,6 @@ Run `testctl doctor` (or `/testctl:doctor`) any time to check this machine: it r
 version and which stack tools are installed, and lists the stacks it can test here.
 
 **`testctl preflight`** — Frappe test-readiness check (dev requirements, allow_tests, encryption key, before_tests) with the exact fix for each gap.
-
-## Updating
-
-When a new version is released, refresh the marketplace and update the plugin:
-
-```
-/plugin marketplace update testctl
-/plugin update testctl
-/reload-plugins
-```
-
-(Or use the interactive `/plugin` menu → select `testctl` → Update.) Check your installed
-version any time with `/plugin`.
 
 ## Generating tests
 

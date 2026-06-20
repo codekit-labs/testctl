@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.57.3] - 2026-06-20
+
+### Changed
+- Docs: consolidated and clarified the README **Install** and **Update** instructions — three labeled
+  methods (npm CLI, Claude Code plugin, MCP server) and the update path for each.
+
 ## [1.57.2] - 2026-06-20
 
 ### Changed

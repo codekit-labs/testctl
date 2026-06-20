@@ -33481,7 +33481,7 @@ function buildContextResponse(apps) {
 }
 
 // bin/testctl-mcp.mjs
-var __pkgVersion = true ? "1.57.2" : "dev";
+var __pkgVersion = true ? "1.57.3" : "dev";
 var projectDir = process.env.TESTCTL_PROJECT_DIR || process.cwd();
 var server = new McpServer({ name: "testctl", version: __pkgVersion });
 var ok = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj) }], structuredContent: obj });
