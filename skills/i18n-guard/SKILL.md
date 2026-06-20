@@ -42,15 +42,25 @@ more than one locale (translation files / configured languages) and confirm the 
    load the base locale's key-set and each other configured locale's key-set and assert **parity**:
    no key present in the base is missing in another locale, and no value is empty. Flatten nested keys
    (dotted paths) before comparing. A missing or empty key fails the test (or is skipped with a clear
-   reason for the user — never silently relaxed).
+   reason for the user — never silently relaxed). **If only one locale is configured** (e.g. a path
+   argument that bypasses the multi-locale discovery filter), parity is vacuous — skip it, state the
+   reason clearly, and proceed to the hardcoded-string report + RTL families.
    - **Flutter:** compare the keys across the `.arb` files (ignore `@`-prefixed metadata entries).
-   - **Frappe:** compare the source-string set across the translation `.csv`/`.po` files for the
-     configured languages.
+   - **Frappe:** for each configured language, check that every source string used in the app has a
+     corresponding row in that language's translation `.csv`/`.po` file. Frappe translations are keyed
+     by **source string** (not a separate key namespace), so a missing row falls through to English —
+     parity means "every source string has a row per configured language," not "two translation files
+     agree with each other."
    - **Web:** compare the flattened key-set across the locale JSON files.
    Then **report** (static scan, file + line) user-facing strings that are **hardcoded** — not wrapped
    in the i18n function (`Text('literal')` not via the generated localizations in Flutter; a bare
    string not via `_()` / `frappe._` in Frappe py/js/html; literal JSX/template text not via `t()` in
    Web). Report these for the user; do not rewrite them.
+   Additionally, **report** (file + line) any key whose translated value is **byte-identical to the
+   base/source string** — label these "possibly untranslated." A translator may have left the English
+   stub in place, so the parity check passes (key present, value non-empty) while the UI still shows
+   English. Frame this as a report (not a failing assertion) because equality can be legitimate for
+   brand names, symbols, or format strings. **"Present + non-empty" is not the same as "translated."**
 
 3. **RTL directionality.** Where the stack supports it, write a **both-directions render test**: mount
    the component under RTL **and** under LTR and assert it builds with no overflow/clipping.
@@ -87,7 +97,11 @@ more than one locale (translation files / configured languages) and confirm the 
   an RTL app) **for the user** — never auto-translate, never rewrite app code, never invent a missing
   translation.
 - Key parity is asserted strictly; never weaken/skip a parity assertion to force green. A real gap is
-  reported (or skipped with a clear reason), never silently relaxed.
+  reported (or skipped with a clear reason), never silently relaxed. **"Present + non-empty" is not
+  the same as "translated"** — also report keys whose value is byte-identical to the base string as
+  "possibly untranslated" (a report, not an assertion, since brand names/symbols/format strings can
+  legitimately match). If only one locale is configured, parity is vacuous — skip it with a stated
+  reason and run only the hardcoded-string report + RTL families.
 - RTL is checked by rendering under **both** directions (logical start/end, no overflow), not by a
   pixel/screenshot diff.
 - Localized formatting protects the **display** for the active locale — distinct from

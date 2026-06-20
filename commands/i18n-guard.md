@@ -17,9 +17,15 @@ Guard internationalization correctness using the i18n-guard workflow.
 3. Follow the `i18n-guard` skill. For each app in scope write NEW test files (reuse existing masters,
    never heavy creates):
    - **Translation completeness / key parity:** assert every configured locale covers the base locale's
-     key-set with no missing or empty values (flatten nested keys first). REPORT hardcoded user-facing
-     strings (not via the i18n function: `Text('literal')` / bare `_()`-less string / literal JSX/template
-     text) with file + line — do not rewrite them.
+     key-set with no missing or empty values (flatten nested keys first). If only one locale is
+     configured, parity is vacuous — skip it, state the reason, and proceed to the reports below.
+     Frappe: parity means every source string used in the app has a row in each configured language's
+     `.csv`/`.po` file (Frappe translations are keyed by source string, not a separate key namespace).
+     REPORT hardcoded user-facing strings (not via the i18n function: `Text('literal')` / bare
+     `_()`-less string / literal JSX/template text) with file + line — do not rewrite them.
+     ALSO REPORT keys whose translated value is byte-identical to the base/source string as "possibly
+     untranslated" (present + non-empty ≠ translated; report, not assertion — brand names/symbols can
+     legitimately match).
    - **RTL directionality:** render the component under both `rtl` and `ltr` (Flutter `Directionality`,
      Web `dir="rtl"`/`dir="ltr"` wrapper) and assert it builds with no overflow. REPORT physical
      `left`/`right` (prefer logical start/end, `margin-inline-start`, `EdgeInsetsDirectional`).

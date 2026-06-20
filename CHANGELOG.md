@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.54.1] - 2026-06-20
+
+### Changed
+- **`i18n-guard`** — closed a vacuous-green gap: key-parity ("present + non-empty") does not mean
+  "translated", so the skill now also REPORTS keys whose value is byte-identical to the base string
+  ("possibly untranslated" — framed as a report, not an assertion, since brand names/symbols/format
+  strings can legitimately match). Added a single-locale skip (parity is vacuous with one locale) and
+  clarified that Frappe `.csv` translations are keyed by source string (parity = every source string
+  has a row per configured language).
+
 ## [1.54.0] - 2026-06-20
 
 ### Added
