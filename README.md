@@ -181,6 +181,7 @@ And three more for the rest of the lifecycle:
 /testctl:migration-guard       # Frappe data patches: idempotent, no data loss, intended transform (calls execute() directly)
 /testctl:perf-guard            # performance: no N+1 — expensive-call count must not grow with input size (deterministic, no wall-clock)
 /testctl:i18n-guard            # i18n: translation completeness / key parity, RTL directionality, locale-aware display — from your own locales
+/testctl:isolation-guard       # isolation: no state leak + order independence (reordered re-run) — deterministic, parallel-safe; reports leaking/order-dependent tests
 ```
 
 These guards are universal — each reads your project's own config (tax rates, auth/roles, currency
@@ -199,6 +200,13 @@ counts, not wall-clock, so the tests never flake.
 it asserts translation key-parity across every locale (no missing/empty keys), renders the UI under both
 RTL and LTR (logical start/end, no overflow), and checks numbers/dates display per the active locale —
 reporting hardcoded strings and physical left/right rather than rewriting them.
+
+`isolation-guard` proves the suite stays deterministic and parallel-safe: it snapshots external state
+(DB row counts, temp files, module globals) before and after a test and asserts no leftover, and it
+re-runs the suite under a shuffled/reversed order and asserts the same result — reporting a leaking or
+order-dependent test (and, on Frappe, a write-without-rollback or a `frappe.db.commit()` that defeats
+the rollback) rather than rewriting it. Distinct from `test-audit` (a static lint) and `flaky-hunter`
+(runs a suite N times) — this adds a deterministic proof.
 
 ## Run history
 

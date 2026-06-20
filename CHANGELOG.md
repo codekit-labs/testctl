@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.55.0] - 2026-06-20
+
+### Added
+- **`isolation-guard` skill** (27th) — PROVES test isolation so the suite stays deterministic and
+  parallel-safe. Two deterministic invariant families: **no state leak** (snapshot the external state a
+  test touches — DB row counts for the tables it writes, temp files, module/global state — BEFORE and
+  AFTER and assert AFTER == BEFORE) and **order independence** (run the suite, then re-run it under a
+  CHANGED order — vitest `--sequence.shuffle`, jest seeded/`--shard`, `pytest-randomly`, Flutter test
+  order — and assert identical pass/fail). Per stack: Frappe `FrappeTestCase` rolls back automatically,
+  so it REPORTS tests that write from a plain `unittest.TestCase` (no rollback) or call
+  `frappe.db.commit()` (defeats rollback) and asserts no `_Test`/created rows persist; Web/Electron/Next
+  (jest/vitest) snapshot temp files + module globals and re-run shuffled; Flutter flags shared mutable
+  statics and leaked `SharedPreferences`. Distinct from `test-audit` (a static lint for missing teardown)
+  and `flaky-hunter` (runs a suite N times to find intermittency) — this is the deterministic proactive
+  guard in between. Reports real violations (a leaking test, an order-dependent test, a
+  write-without-rollback) with file + line — never auto-rewrites a test, never adds teardown silently,
+  never weakens an assertion to pass. Additive (new test files / a focused isolation check only); Frappe
+  runs only on an `allow_tests` site; leaves changes uncommitted. Markdown-only — NO engine changes (262
+  tests stay green). Skills → 27.
+
 ## [1.54.1] - 2026-06-20
 
 ### Changed
