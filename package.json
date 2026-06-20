@@ -1,6 +1,6 @@
 {
   "name": "testctl",
-  "version": "1.57.0",
+  "version": "1.57.1",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue via Vitest/Jest), and E2E (Playwright / Flutter integration_test) tests with one command and a unified report. Ships as a Claude Code plugin.",
   "keywords": [
     "testing",

@@ -33481,7 +33481,7 @@ function buildContextResponse(apps) {
 }
 
 // bin/testctl-mcp.mjs
-var __pkgVersion = true ? "1.57.0" : "dev";
+var __pkgVersion = true ? "1.57.1" : "dev";
 var projectDir = process.env.TESTCTL_PROJECT_DIR || process.cwd();
 var server = new McpServer({ name: "testctl", version: __pkgVersion });
 var ok = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj) }], structuredContent: obj });
@@ -33502,9 +33502,15 @@ server.registerTool(
         only: stack || null,
         coverage: !!coverage,
         changed: changed ? { ref: null } : null
+        // runProject expects { ref }; null = default base branch
       });
+      const ts = (/* @__PURE__ */ new Date()).toISOString();
       try {
-        saveLastRun(projectDir, core.results, (/* @__PURE__ */ new Date()).toISOString());
+        appendHistory(projectDir, historyEntry(core.results, ts));
+      } catch {
+      }
+      try {
+        saveLastRun(projectDir, core.results, ts);
       } catch {
       }
       return ok(buildRunResponse(core));

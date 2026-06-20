@@ -9,6 +9,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { runProject, buildContextApps, STACKS } from './cli.mjs';
 import { loadLastRun, saveLastRun } from '../lib/lastrun.mjs';
+import { appendHistory, historyEntry } from '../lib/history.mjs';
 import { buildRunResponse, buildDigestResponse, buildContextResponse } from '../lib/mcp.mjs';
 
 // Fix 3: version injected at build time by esbuild define (TESTCTL_MCP_VERSION → package.json version).
@@ -39,9 +40,11 @@ server.registerTool(
       const core = await runProject(projectDir, {
         only: stack || null,
         coverage: !!coverage,
-        changed: changed ? { ref: null } : null,
+        changed: changed ? { ref: null } : null, // runProject expects { ref }; null = default base branch
       });
-      try { saveLastRun(projectDir, core.results, new Date().toISOString()); } catch { /* best-effort */ }
+      const ts = new Date().toISOString();
+      try { appendHistory(projectDir, historyEntry(core.results, ts)); } catch { /* best-effort */ }
+      try { saveLastRun(projectDir, core.results, ts); } catch { /* best-effort */ }
       return ok(buildRunResponse(core));
     } catch (err) {
       return { content: [{ type: 'text', text: JSON.stringify({ error: String(err && err.message || err) }) }], isError: true };

@@ -600,7 +600,7 @@ testctl is also an **MCP server** (stdio), so any MCP client — Cursor, Windsur
 custom agents, CI bots — can run your tests and get structured results, not scraped text. Three read/data
 tools (your agent does any fixing):
 
-- `testctl_run` — run tests (optional `stack`/`path`, `changed`, `coverage`); returns `{ results,
+- `testctl_run` — run tests (optional `stack`, `changed`, `coverage`); returns `{ results,
   failures, exitCode, patchCoverage }`.
 - `testctl_digest` — recall the last run's failures from `.testctl/last-run.json` (no re-run).
 - `testctl_context` — per-app digest: status, coverage, untested symbols, recommended action.

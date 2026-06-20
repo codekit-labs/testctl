@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.57.1] - 2026-06-20
+
+### Fixed
+- **MCP server** — `testctl_run` now appends to `.testctl/history.jsonl` (via `appendHistory`) in addition to
+  saving the last-run digest, so runs driven through the MCP server show up in `testctl report` / `testctl trend`
+  just like CLI runs (front-end parity). Docs: corrected the MCP `testctl_run` input list (no `path`; it takes
+  `stack`/`changed`/`coverage`).
+
 ## [1.57.0] - 2026-06-20
 
 ### Added
