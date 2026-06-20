@@ -36,31 +36,43 @@ have tests (passed + failed > 0) and confirm the list first.
    before writing checks.
 
 2. **No state leak — before/after snapshot** (in NEW files, reusing existing masters; never heavy
-   creates — see `data-factory`). Snapshot the external state a representative test touches BEFORE it
-   runs and again AFTER, and assert AFTER == BEFORE (it cleaned up everything it created). State to
-   snapshot: **DB row counts** for the doctypes/tables the test writes, **temp files** it creates, and
-   **global/module-level** state it mutates.
+   creates — see `data-factory`). Snapshot the **identity set** of rows/files/keys the test creates
+   (scoped by a unique marker — a name prefix, a UUID field, a temp-dir path — chosen before the test
+   runs) BEFORE and AFTER, and assert the marker-scoped set is empty after. **Do NOT snapshot a bare
+   global row count**: a count passes vacuously when the test creates one row and deletes another
+   (net-zero masking), and races under the parallel runner this skill certifies (a concurrent test's
+   insert corrupts the delta). The snapshot must be scoped to the rows THIS test owns.
    - **Frappe/ERPNext:** inside `FrappeTestCase` the transaction rolls back, so leaks there are largely
      automatic. The guard's real job is to **REPORT** (file + line): (a) tests that create records but do
      NOT subclass `FrappeTestCase` (a plain `unittest.TestCase` does NOT roll back), and (b) tests that
      call `frappe.db.commit()` (which defeats the rollback and persists rows). Then write a runnable
-     check asserting **no `_Test`/created rows persist** (row count returns to baseline) after the
-     module's tests run.
+     check asserting **no marker-scoped rows persist** after the module's tests run — this check MUST
+     run OUTSIDE any `FrappeTestCase` rollback boundary (a separate connection, process, or a plain
+     `unittest.TestCase` wrapper), otherwise the rollback self-clears the rows and the assertion is a
+     vacuous green.
    - **Web / Electron / Next.js (jest/vitest):** assert `afterEach` cleanup actually fires; snapshot the
-     temp-file set and module-level globals before/after a test and assert no leftover. REPORT a leaked
-     module global or temp file that survives the test.
+     marker-scoped temp-file set and module-level globals before/after a test and assert no leftover.
+     REPORT a leaked module global or temp file that survives the test.
    - **Flutter:** assert `setUp`/`tearDown` reset shared state; REPORT shared mutable `static`s carried
-     between tests and leaked `SharedPreferences`/temp files.
+     between tests and leaked `SharedPreferences`/temp files (scoped by a unique key prefix).
 
 3. **Order independence — reordered re-run** (the headline runnable proof). Run the suite, then run it
-   again under a **changed order** using the runner's OWN ordering control, and assert identical pass/fail
-   results. Changing the order is essential — a re-run in the same order proves nothing.
+   again under a **verified different order** using the runner's OWN ordering control, and assert
+   identical pass/fail results. Changing the order is essential — a re-run in the same order proves
+   nothing. **Before trusting a green, confirm the reordered run actually used a different permutation:**
+   reverse is a no-op for a 1-test (or 2-symmetric) module; a random shuffle can reproduce the
+   original seed. If the reordered sequence equals the original, re-shuffle or select a known-different
+   permutation and confirm `new_order != original_order` before proceeding. **A suite with fewer than 2
+   order-sensitive tests cannot prove order-independence** — skip this step with a stated reason rather
+   than emit a vacuous pass.
    - **Web (vitest):** `--sequence.shuffle` (optionally a fixed `--sequence.seed`) to randomize order;
-     **jest:** seeded order / `--shard` to vary execution. Compare the two result sets.
-   - **Frappe:** re-run the module's tests reversed/shuffled and compare; a flip means a test relies on
-     another's residual rows or shared module state.
+     **jest:** seeded order / `--shard` to vary execution. Compare the two result sets; verify the
+     execution order actually changed.
+   - **Frappe:** re-run the module's tests reversed/shuffled and compare; confirm the reversed list
+     differs from the original before trusting the result. A flip means a test relies on another's
+     residual rows or shared module state.
    - **pytest-based code:** `pytest-randomly` to shuffle (`-p no:randomly` to pin a baseline); **Flutter:**
-     re-run under a changed test order.
+     re-run under a changed test order; verify the order changed.
    A test that passes alone but fails in-suite (or the reverse), or one that flips between the two
    orders, is an isolation violation — **REPORT** it (file + line), naming the cause (a leaked global, a
    shared fixture, a sibling's DB row) where discoverable. Do not auto-fix it.
@@ -82,14 +94,23 @@ have tests (passed + failed > 0) and confirm the list first.
   an order-independence re-run (same result under reversed/shuffled order). This is NOT a static lint
   (that's `test-audit`) and NOT a run-N-times intermittency hunt (that's `flaky-hunter`).
 - The order-independence proof must actually CHANGE the order (reverse/shuffle via the runner's own
-  ordering control) and compare results. A re-run in the SAME order is a vacuous green — it proves
-  nothing.
+  ordering control) AND verify the new permutation differs from the original before trusting a green.
+  Reverse is a no-op for a 1-test module; a shuffle can reproduce the seed. Re-shuffle or pick a
+  known-different permutation when the reordered sequence equals the original. A suite with fewer than
+  2 order-sensitive tests cannot prove order-independence — skip with a reason, do not emit a vacuous
+  pass.
+- The leak snapshot must target the **identity set** of rows/files the test creates, scoped by a unique
+  marker (name prefix, UUID field, temp-dir path). A bare global count masks net-zero create-and-delete
+  and races under a parallel runner. Never use a global table/file count as the snapshot.
+- **Frappe no-persist assertion:** the check that no marker-scoped rows survive must run OUTSIDE any
+  `FrappeTestCase` rollback boundary — a separate connection, process, or plain `unittest.TestCase`
+  wrapper. Placing it inside `FrappeTestCase` self-rolls-back the rows and produces a vacuous green.
 - Report real violations (a leaking test, an order-dependent test, a Frappe write-without-rollback or a
   `frappe.db.commit()` that defeats rollback) **for the user** with file + line — never auto-rewrite the
   test, never add teardown into someone else's test silently, never weaken an assertion to force green.
 - **Frappe:** `FrappeTestCase` gives transactional rollback for free; a plain `unittest.TestCase` that
-  writes, or any `frappe.db.commit()`, defeats it — flag both, and assert no `_Test`/created rows persist
-  after the module's tests.
+  writes, or any `frappe.db.commit()`, defeats it — flag both, and assert no marker-scoped rows persist
+  after the module's tests (outside the rollback boundary).
 - Reuse existing masters (Frappe); never create heavyweight records that trigger framework setup
   cascades.
 - Additive only — new test files / a focused isolation check; never modify existing tests or app code.

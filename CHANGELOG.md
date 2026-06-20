@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.55.1] - 2026-06-20
+
+### Changed
+- **`isolation-guard`** — closed two vacuous-green holes: the order-independence re-run must be a
+  VERIFIED permutation (reverse of a 1-test module = the same order; a shuffle can reproduce the seed —
+  confirm the order actually changed, and skip with a reason when there are <2 order-sensitive tests);
+  and the leak check must snapshot the IDENTITY SET of rows/files the test created (scoped by a unique
+  marker), never a bare global count — a count masks create-and-delete net-zero and races under a
+  parallel runner. On Frappe the no-persisted-rows assertion must run OUTSIDE the rollback or it
+  self-rolls-back to a vacuous green.
+
 ## [1.55.0] - 2026-06-20
 
 ### Added
