@@ -2,6 +2,7 @@
 import { writeFileSync, existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve, relative } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../lib/config.mjs';
 import { frappePreflight, formatPreflight, frappePointer } from '../lib/preflight.mjs';
 import { discoverTargets } from '../lib/discover.mjs';
@@ -102,7 +103,13 @@ async function runTarget(target, coverage = false) {
   return result;
 }
 
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null, changedCoverageMin = null) {
+// Pure run core shared by `cmdRun` (CLI) and the MCP `testctl_run` tool. Discovers, runs,
+// gates, and computes patch coverage WITHOUT printing, exiting, writing report files, posting
+// notify webhooks, appending history, or saving last-run. Returns the data; callers do I/O.
+async function runProject(projectDir, {
+  only = null, coverage = false, concurrency = 4, minCoverage = null, changed = null,
+  cache = false, retries = null, changedCoverageMin = null,
+} = {}) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -117,6 +124,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
 
+  const notes = [];
   let changedDiffText = '';
   if (changed) {
     const targetDirs = targets
@@ -124,16 +132,13 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
       .filter(Boolean);
     const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
     changedDiffText = gitChangedLineRanges(projectDir, changed.ref, targetDirs);
-    if (note) console.log(note);
+    if (note) notes.push(note);
     if (files) {
       const nudge = unconfiguredChangedNote(targets, files);
-      if (nudge) console.log(nudge);
+      if (nudge) notes.push(nudge);
       targets = selectChangedTargets(targets, files, projectDir);
       if (targets.length === 0) {
-        console.log('No changed apps to test.');
-        console.log('TESTCTL_JSON ' + JSON.stringify({ results: [], failedLogs: [] }));
-        console.log('Exit code: 0');
-        return 0;
+        return { results: [], exitCode: 0, patchCoverage: null, notes, changedEmpty: true };
       }
     }
   }
@@ -149,21 +154,24 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     return { t, cached: false };
   });
 
-  if (!quiet) {
+  // Collect discovery lines into notes so cmdRun can print them respecting --quiet
+  {
+    const discoveryLines = [];
     if (targets.length === 0) {
-      console.log('No testable apps found.');
+      discoveryLines.push('No testable apps found.');
     } else {
-      console.log('Discovered apps:');
+      discoveryLines.push('Discovered apps:');
       for (const d of decisions) {
         const t = d.t;
         const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
         const marker = d.cached ? '✓' : t.notice ? '⚠' : '•';
         const suffix = d.cached ? ' cached' : t.notice ? ' — ' + t.note : '';
-        console.log(`  ${marker} ${name}${suffix}`);
+        discoveryLines.push(`  ${marker} ${name}${suffix}`);
       }
     }
     const runnable = decisions.filter((d) => !d.cached && !d.t.notice).length;
-    if (runnable > 0) console.log(`\n▶ Running ${runnable} app(s) (concurrency ${concurrency})...`);
+    if (runnable > 0) discoveryLines.push(`\n▶ Running ${runnable} app(s) (concurrency ${concurrency})...`);
+    notes.push({ _discovery: true, lines: discoveryLines });
   }
 
   const toRun = decisions.filter((d) => !d.cached).map((d) => d.t);
@@ -208,11 +216,10 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   }
 
   applyCoverageGate(results, gate);
-  if (!quiet) console.log('\n' + formatReport(results));
   const code = computeExitCode(results);
-  console.log(`\nExit code: ${code}`);
 
   let code2 = code;
+  let pcResult = null;
   if (changed) {
     const diffRanges = parseDiffRanges(changedDiffText);
     const lcovLines = new Map();
@@ -236,12 +243,41 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
         }
       }
     }
-    const report = patchCoverage(lcovLines, resolvedRanges);
-    console.log('\n' + formatPatchCoverage(report, patchGate));
-    console.log('TESTCTL_PATCH_COVERAGE ' + JSON.stringify(report));
-    if (patchGate != null && report.overall.pct != null && report.overall.pct < patchGate) {
+    pcResult = patchCoverage(lcovLines, resolvedRanges);
+    if (patchGate != null && pcResult.overall.pct != null && pcResult.overall.pct < patchGate) {
       code2 = code2 === 0 ? 1 : code2;
     }
+  }
+
+  return { results, exitCode: code2, patchCoverage: pcResult, notes, changedEmpty: false, _code: code, _patchGate: patchGate };
+}
+
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null, changedCoverageMin = null) {
+  const { results, exitCode, patchCoverage: pcResult, notes, changedEmpty, _code: code, _patchGate: patchGate } =
+    await runProject(projectDir, { only, coverage, concurrency, minCoverage, changed, cache, retries, changedCoverageMin });
+
+  // Emit notes: changed-filter notes first, then discovery block (respecting --quiet)
+  for (const n of notes) {
+    if (n && n._discovery) {
+      if (!quiet) for (const l of n.lines) console.log(l);
+    } else {
+      console.log(n);
+    }
+  }
+
+  if (changedEmpty) {
+    console.log('No changed apps to test.');
+    console.log('TESTCTL_JSON ' + JSON.stringify({ results: [], failedLogs: [] }));
+    console.log('Exit code: 0');
+    return 0;
+  }
+
+  if (!quiet) console.log('\n' + formatReport(results));
+  console.log(`\nExit code: ${code}`);
+
+  if (pcResult !== null) {
+    console.log('\n' + formatPatchCoverage(pcResult, patchGate));
+    console.log('TESTCTL_PATCH_COVERAGE ' + JSON.stringify(pcResult));
   }
 
   if (notifyUrl && code !== 0) {
@@ -274,7 +310,7 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   const ts = new Date().toISOString();
   appendHistory(projectDir, historyEntry(results, ts));
   saveLastRun(projectDir, results, ts);
-  return code2;
+  return exitCode;
 }
 
 function cmdReport(projectDir) {
@@ -418,7 +454,7 @@ function walkSrcFiles(dir, acc, depth = 0) {
 // `testctl context` — one compact per-app digest a test-skill can act on without
 // discovering/running/reading broadly: status, failures, coverage, and the untested
 // functions/classes (name + file:line) found by a cheap language-agnostic scan.
-function cmdContext(projectDir, only) {
+function buildContextApps(projectDir, only) {
   const config = loadConfig(projectDir);
   const gate = config.coverageMin != null ? config.coverageMin : null;
   const targets = discoverTargets(projectDir, config, only).filter((t) => !t.notice);
@@ -429,7 +465,7 @@ function cmdContext(projectDir, only) {
     for (const r of lr.results || []) lastByKey[`${r.stack}:${r.label || r.stack}`] = r;
   } catch { /* no prior run */ }
 
-  const apps = targets.map((t) => {
+  return targets.map((t) => {
     const last = lastByKey[`${t.stack}:${t.label || t.stack}`] || null;
     const app = { stack: t.stack, label: t.label || t.stack, path: t.path || null };
     app.tests = last ? (last.passed || 0) + (last.failed || 0) + (last.skipped || 0) : 0;
@@ -463,7 +499,10 @@ function cmdContext(projectDir, only) {
     app.untestedCount = app.untested.length;
     return app;
   });
+}
 
+function cmdContext(projectDir, only) {
+  const apps = buildContextApps(projectDir, only);
   console.log(formatContext(apps));
   console.log('TESTCTL_CONTEXT ' + JSON.stringify({ apps }));
   return 0;
@@ -614,4 +653,13 @@ async function main() {
   return process.exit(cmd ? 2 : 0);
 }
 
-main();
+// Run the CLI only when this file is the entry, not when imported (by the MCP server / tests).
+// ESM source: guard via import.meta.url. CJS bundle (esbuild): import.meta.url becomes
+// undefined in the bundle; the CJS bundle is always the CLI entry (never imported), so
+// detect CJS context and always run main() there.
+const _isCjsContext = typeof module !== 'undefined';
+if (_isCjsContext || import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  main();
+}
+
+export { runProject, buildContextApps, STACKS };

@@ -8,6 +8,10 @@ var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -24,6 +28,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // node_modules/yaml/dist/nodes/identity.js
 var require_identity = __commonJS({
@@ -9437,9 +9442,17 @@ var require_fxp = __commonJS({
 });
 
 // bin/cli.mjs
+var cli_exports = {};
+__export(cli_exports, {
+  STACKS: () => STACKS,
+  buildContextApps: () => buildContextApps,
+  runProject: () => runProject
+});
+module.exports = __toCommonJS(cli_exports);
 var import_node_fs17 = require("node:fs");
 var import_node_child_process4 = require("node:child_process");
 var import_node_path17 = require("node:path");
+var import_node_url = require("node:url");
 
 // lib/config.mjs
 var import_node_fs = require("node:fs");
@@ -11753,6 +11766,7 @@ function saveCache(projectDir, cache) {
 }
 
 // bin/cli.mjs
+var import_meta = {};
 var STACKS = ["frappe", "flutter", "electron", "nextjs", "supabase", "web", "e2e"];
 function cmdInit(projectDir, { ci = false } = {}) {
   const path = (0, import_node_path17.join)(projectDir, "testctl.yaml");
@@ -11816,7 +11830,16 @@ async function runTarget(target, coverage = false) {
   result.label = target.label || result.stack;
   return result;
 }
-async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null, changedCoverageMin = null) {
+async function runProject(projectDir, {
+  only = null,
+  coverage = false,
+  concurrency = 4,
+  minCoverage = null,
+  changed = null,
+  cache = false,
+  retries = null,
+  changedCoverageMin = null
+} = {}) {
   const config = loadConfig(projectDir);
   let gate = minCoverage;
   if (gate == null && config.coverageMin != null) gate = config.coverageMin;
@@ -11830,21 +11853,19 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
   if (retries == null) retries = config.retry != null ? Number(config.retry) : 0;
   if (Number.isNaN(retries) || retries < 0) retries = 0;
   let targets = discoverTargets(projectDir, config, only);
+  const notes = [];
   let changedDiffText = "";
   if (changed) {
     const targetDirs = targets.map((t) => t.path ? (0, import_node_path17.resolve)(projectDir, t.path) : t.dir ? (0, import_node_path17.resolve)(t.dir) : t.config && t.config.benchPath ? (0, import_node_path17.resolve)(t.config.benchPath) : null).filter(Boolean);
     const { files, note } = gitChangedFiles(projectDir, changed.ref, targetDirs);
     changedDiffText = gitChangedLineRanges(projectDir, changed.ref, targetDirs);
-    if (note) console.log(note);
+    if (note) notes.push(note);
     if (files) {
       const nudge = unconfiguredChangedNote(targets, files);
-      if (nudge) console.log(nudge);
+      if (nudge) notes.push(nudge);
       targets = selectChangedTargets(targets, files, projectDir);
       if (targets.length === 0) {
-        console.log("No changed apps to test.");
-        console.log("TESTCTL_JSON " + JSON.stringify({ results: [], failedLogs: [] }));
-        console.log("Exit code: 0");
-        return 0;
+        return { results: [], exitCode: 0, patchCoverage: null, notes, changedEmpty: true };
       }
     }
   }
@@ -11858,22 +11879,24 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     }
     return { t, cached: false };
   });
-  if (!quiet) {
+  {
+    const discoveryLines = [];
     if (targets.length === 0) {
-      console.log("No testable apps found.");
+      discoveryLines.push("No testable apps found.");
     } else {
-      console.log("Discovered apps:");
+      discoveryLines.push("Discovered apps:");
       for (const d of decisions) {
         const t = d.t;
         const name = t.label && t.label !== t.stack ? `${t.stack} (${t.label})` : t.stack;
         const marker = d.cached ? "\u2713" : t.notice ? "\u26A0" : "\u2022";
         const suffix = d.cached ? " cached" : t.notice ? " \u2014 " + t.note : "";
-        console.log(`  ${marker} ${name}${suffix}`);
+        discoveryLines.push(`  ${marker} ${name}${suffix}`);
       }
     }
     const runnable = decisions.filter((d) => !d.cached && !d.t.notice).length;
-    if (runnable > 0) console.log(`
+    if (runnable > 0) discoveryLines.push(`
 \u25B6 Running ${runnable} app(s) (concurrency ${concurrency})...`);
+    notes.push({ _discovery: true, lines: discoveryLines });
   }
   const toRun = decisions.filter((d) => !d.cached).map((d) => d.t);
   const ran = await mapPool(toRun, concurrency, async (t) => {
@@ -11912,11 +11935,9 @@ async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCo
     saveCache(projectDir, cacheStore);
   }
   applyCoverageGate(results, gate);
-  if (!quiet) console.log("\n" + formatReport(results));
   const code = computeExitCode(results);
-  console.log(`
-Exit code: ${code}`);
   let code2 = code;
+  let pcResult = null;
   if (changed) {
     const diffRanges = parseDiffRanges(changedDiffText);
     const lcovLines = /* @__PURE__ */ new Map();
@@ -11946,12 +11967,34 @@ Exit code: ${code}`);
         }
       }
     }
-    const report = patchCoverage(lcovLines, resolvedRanges);
-    console.log("\n" + formatPatchCoverage(report, patchGate));
-    console.log("TESTCTL_PATCH_COVERAGE " + JSON.stringify(report));
-    if (patchGate != null && report.overall.pct != null && report.overall.pct < patchGate) {
+    pcResult = patchCoverage(lcovLines, resolvedRanges);
+    if (patchGate != null && pcResult.overall.pct != null && pcResult.overall.pct < patchGate) {
       code2 = code2 === 0 ? 1 : code2;
     }
+  }
+  return { results, exitCode: code2, patchCoverage: pcResult, notes, changedEmpty: false, _code: code, _patchGate: patchGate };
+}
+async function cmdRun(projectDir, only, coverage = false, concurrency = 4, minCoverage = null, changed = null, quiet = false, cache = false, junitPath = null, sarifPath = null, retries = null, htmlPath = null, notifyUrl = null, mdPath = null, changedCoverageMin = null) {
+  const { results, exitCode, patchCoverage: pcResult, notes, changedEmpty, _code: code, _patchGate: patchGate } = await runProject(projectDir, { only, coverage, concurrency, minCoverage, changed, cache, retries, changedCoverageMin });
+  for (const n of notes) {
+    if (n && n._discovery) {
+      if (!quiet) for (const l of n.lines) console.log(l);
+    } else {
+      console.log(n);
+    }
+  }
+  if (changedEmpty) {
+    console.log("No changed apps to test.");
+    console.log("TESTCTL_JSON " + JSON.stringify({ results: [], failedLogs: [] }));
+    console.log("Exit code: 0");
+    return 0;
+  }
+  if (!quiet) console.log("\n" + formatReport(results));
+  console.log(`
+Exit code: ${code}`);
+  if (pcResult !== null) {
+    console.log("\n" + formatPatchCoverage(pcResult, patchGate));
+    console.log("TESTCTL_PATCH_COVERAGE " + JSON.stringify(pcResult));
   }
   if (notifyUrl && code !== 0) {
     const payload = redactNotifyPayload(buildNotifyPayload(results, { project: projectDir.split("/").filter(Boolean).pop() || null }));
@@ -11992,7 +12035,7 @@ Exit code: ${code}`);
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   appendHistory(projectDir, historyEntry(results, ts));
   saveLastRun(projectDir, results, ts);
-  return code2;
+  return exitCode;
 }
 function cmdReport(projectDir) {
   const path = (0, import_node_path17.join)(projectDir, ".testctl", "history.jsonl");
@@ -12103,7 +12146,7 @@ function walkSrcFiles(dir, acc, depth = 0) {
     else if (e.isFile()) acc.push(full);
   }
 }
-function cmdContext(projectDir, only) {
+function buildContextApps(projectDir, only) {
   const config = loadConfig(projectDir);
   const gate = config.coverageMin != null ? config.coverageMin : null;
   const targets = discoverTargets(projectDir, config, only).filter((t) => !t.notice);
@@ -12113,7 +12156,7 @@ function cmdContext(projectDir, only) {
     for (const r of lr.results || []) lastByKey[`${r.stack}:${r.label || r.stack}`] = r;
   } catch {
   }
-  const apps = targets.map((t) => {
+  return targets.map((t) => {
     const last = lastByKey[`${t.stack}:${t.label || t.stack}`] || null;
     const app = { stack: t.stack, label: t.label || t.stack, path: t.path || null };
     app.tests = last ? (last.passed || 0) + (last.failed || 0) + (last.skipped || 0) : 0;
@@ -12155,6 +12198,9 @@ function cmdContext(projectDir, only) {
     app.untestedCount = app.untested.length;
     return app;
   });
+}
+function cmdContext(projectDir, only) {
+  const apps = buildContextApps(projectDir, only);
   console.log(formatContext(apps));
   console.log("TESTCTL_CONTEXT " + JSON.stringify({ apps }));
   return 0;
@@ -12314,4 +12360,13 @@ async function main() {
   console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl trend [--window=N]   (is testing getting better or worse over the last N runs?)\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context");
   return process.exit(cmd ? 2 : 0);
 }
-main();
+var _isCjsContext = typeof module !== "undefined";
+if (_isCjsContext || import_meta.url === (0, import_node_url.pathToFileURL)(process.argv[1] || "").href) {
+  main();
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  STACKS,
+  buildContextApps,
+  runProject
+});
