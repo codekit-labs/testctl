@@ -2,23 +2,58 @@
   "name": "testctl",
   "version": "1.56.1",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue via Vitest/Jest), and E2E (Playwright / Flutter integration_test) tests with one command and a unified report. Ships as a Claude Code plugin.",
-  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "web", "react", "vue", "vitest", "jest", "e2e", "playwright", "integration-test", "claude-code", "plugin", "test-runner", "ci"],
+  "keywords": [
+    "testing",
+    "cli",
+    "frappe",
+    "flutter",
+    "electron",
+    "nextjs",
+    "supabase",
+    "web",
+    "react",
+    "vue",
+    "vitest",
+    "jest",
+    "e2e",
+    "playwright",
+    "integration-test",
+    "claude-code",
+    "plugin",
+    "test-runner",
+    "ci"
+  ],
   "license": "MIT",
   "author": "Sammish Thundiyil <sammish.thundiyil@gmail.com>",
   "homepage": "https://github.com/codekit-labs/testctl",
-  "repository": { "type": "git", "url": "https://github.com/codekit-labs/testctl.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codekit-labs/testctl.git"
+  },
   "type": "module",
-  "bin": { "testctl": "bin/testctl.mjs" },
-  "engines": { "node": ">=20" },
-  "files": ["bin", "lib", "dist", "README.md", "LICENSE"],
+  "bin": {
+    "testctl": "bin/testctl.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test",
     "build": "node scripts/build.mjs",
     "prepublishOnly": "node scripts/build.mjs && node --test"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "esbuild": "^0.23.0",
     "fast-xml-parser": "^4.4.1",
-    "yaml": "^2.5.1"
+    "yaml": "^2.5.1",
+    "zod": "^3.25.76"
   }
 }

@@ -162,3 +162,64 @@ test('buildContextResponse: null apps → safe empty', () => {
   assert.deepEqual(out.apps, []);
   assert.match(out.text, /No testable apps found/);
 });
+
+// ─── MCP server smoke test (requires dist/testctl-mcp.cjs to be built) ──────
+
+import { spawn } from 'node:child_process';
+import { existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const _here = dirname(fileURLToPath(import.meta.url));
+const _bundle = join(_here, '..', 'dist', 'testctl-mcp.cjs');
+
+test('mcp server: tools/list returns the 3 tools and testctl_digest returns the no-run sentinel',
+  { skip: existsSync(_bundle) ? false : 'dist/testctl-mcp.cjs not built' },
+  async () => {
+    const proj = mkdtempSync(join(tmpdir(), 'testctl-mcp-'));
+    const child = spawn(process.execPath, [_bundle], {
+      cwd: proj, env: { ...process.env, TESTCTL_PROJECT_DIR: proj },
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
+    const killTimer = setTimeout(() => child.kill('SIGKILL'), 8000);
+    try {
+      const send = (msg) => child.stdin.write(JSON.stringify(msg) + '\n');
+      const responses = new Map();
+      let buf = '';
+      const waitFor = (id) => new Promise((resolve, reject) => {
+        const to = setTimeout(() => reject(new Error('timeout waiting for id ' + id)), 6000);
+        const onData = (d) => {
+          buf += d.toString();
+          let nl;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+            if (!line) continue;
+            let m; try { m = JSON.parse(line); } catch { continue; }
+            if (m.id != null) responses.set(m.id, m);
+          }
+          if (responses.has(id)) { clearTimeout(to); child.stdout.off('data', onData); resolve(responses.get(id)); }
+        };
+        child.stdout.on('data', onData);
+      });
+
+      send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+        protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } } });
+      await waitFor(1);
+      send({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
+
+      send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+      const list = await waitFor(2);
+      const names = (list.result.tools || []).map((t) => t.name).sort();
+      assert.deepEqual(names, ['testctl_context', 'testctl_digest', 'testctl_run']);
+
+      send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'testctl_digest', arguments: {} } });
+      const call = await waitFor(3);
+      const payload = JSON.parse(call.result.content[0].text);
+      assert.equal(payload.hasRun, false);
+      assert.match(payload.text, /No run recorded yet/);
+    } finally {
+      clearTimeout(killTimer);
+      child.kill('SIGKILL');
+    }
+  });

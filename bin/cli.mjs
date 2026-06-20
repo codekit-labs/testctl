@@ -654,11 +654,13 @@ async function main() {
 }
 
 // Run the CLI only when this file is the entry, not when imported (by the MCP server / tests).
-// ESM source: guard via import.meta.url. CJS bundle (esbuild): import.meta.url becomes
-// undefined in the bundle; the CJS bundle is always the CLI entry (never imported), so
-// detect CJS context and always run main() there.
+// ESM source: guard via import.meta.url.
+// CJS bundle (dist/testctl.cjs): import.meta.url is undefined; _isCjsContext fires → main().
+// CJS MCP bundle (dist/testctl-mcp.cjs): esbuild --define replaces TESTCTL_MCP_BUNDLE with true,
+// so _isMcpBundle is true and we skip main() even in CJS context.
 const _isCjsContext = typeof module !== 'undefined';
-if (_isCjsContext || import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+const _isMcpBundle = typeof TESTCTL_MCP_BUNDLE !== 'undefined' && TESTCTL_MCP_BUNDLE === true; // eslint-disable-line no-undef
+if (!_isMcpBundle && (_isCjsContext || import.meta.url === pathToFileURL(process.argv[1] || '').href)) {
   main();
 }
 

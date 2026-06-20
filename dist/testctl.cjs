@@ -12361,7 +12361,8 @@ async function main() {
   return process.exit(cmd ? 2 : 0);
 }
 var _isCjsContext = typeof module !== "undefined";
-if (_isCjsContext || import_meta.url === (0, import_node_url.pathToFileURL)(process.argv[1] || "").href) {
+var _isMcpBundle = typeof TESTCTL_MCP_BUNDLE !== "undefined" && TESTCTL_MCP_BUNDLE === true;
+if (!_isMcpBundle && (_isCjsContext || import_meta.url === (0, import_node_url.pathToFileURL)(process.argv[1] || "").href)) {
   main();
 }
 // Annotate the CommonJS export names for ESM import in node:

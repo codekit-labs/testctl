@@ -20,3 +20,18 @@ await build({
 });
 
 console.log('built dist/testctl.cjs');
+
+// Second artifact: the MCP server, with the @modelcontextprotocol/sdk + zod bundled in. SEPARATE from
+// dist/testctl.cjs (which stays dependency-free and unchanged). CJS for the same dynamic-require reason.
+// TESTCTL_MCP_BUNDLE is a compile-time constant: esbuild replaces every reference to it with `true`,
+// which the entry guard in cli.mjs checks to skip main() when cli.mjs is bundled as a library here.
+await build({
+  entryPoints: [join(root, 'bin', 'testctl-mcp.mjs')],
+  outfile: join(root, 'dist', 'testctl-mcp.cjs'),
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node20',
+  define: { TESTCTL_MCP_BUNDLE: 'true' },
+});
+console.log('built dist/testctl-mcp.cjs');
