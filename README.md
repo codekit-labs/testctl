@@ -206,6 +206,21 @@ testctl report
 It shows total runs, per-app pass-rate, flaky apps (ones that flip pass↔fail), and the last run.
 History stays local and is never committed or uploaded.
 
+### Is it getting better or worse? (`testctl trend`)
+
+`report` shows the current state per app; `trend` shows the **trajectory** over the last N runs —
+read-only, from the same history, nothing new captured:
+
+```bash
+testctl trend                # last 10 runs
+testctl trend --window=20    # widen the window
+```
+
+Per app you get a `✓ ✗ ·` sparkline (pass / fail / errored), the pass-rate direction (↑/↓/→, second
+half of the window vs the first), the coverage direction (`↑72% (+12)`), and a `REGRESSED` /
+`improved` / `steady` tag. The footer calls out any app that was green and is now failing first, so a
+fresh regression is the first thing you see. It never gates a run.
+
 ## Failure digest
 
 When tests fail, the machine-readable `TESTCTL_JSON` line includes a `failures[]` digest per app —

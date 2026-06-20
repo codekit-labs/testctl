@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.53.0] - 2026-06-20
+
+### Added
+- `testctl trend` (10th command) — read-only trajectory view over the run history testctl already
+  persists (`.testctl/history.jsonl`). Per app it shows a compact `✓ ✗ ·` sparkline over the last N
+  runs, the pass-rate direction (second-half vs first-half of the window), the coverage direction
+  (first vs last non-null coverage), and flags apps that **regressed** (green→red in the window) or
+  **improved** (red→green). A footer calls out newly-failing apps first. `--window=N` (default 10,
+  clamped ≥ 2). Where `report` answers "what's the current state?", `trend` answers "is it getting
+  better or worse?". Pure core in `lib/trend.mjs` (`computeTrend` / `formatTrend`); thin I/O in
+  `cmdTrend`. Read-only, exit 0 always; prints a `TESTCTL_TREND` json line for tooling. No new data
+  captured, no change to what `run` records or `report` shows.
+
 ## [1.52.1] - 2026-06-19
 
 ### Changed
