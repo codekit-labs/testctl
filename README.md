@@ -182,6 +182,7 @@ And three more for the rest of the lifecycle:
 /testctl:perf-guard            # performance: no N+1 — expensive-call count must not grow with input size (deterministic, no wall-clock)
 /testctl:i18n-guard            # i18n: translation completeness / key parity, RTL directionality, locale-aware display — from your own locales
 /testctl:isolation-guard       # isolation: no state leak + order independence (verified-permutation re-run) — deterministic; leak check is marker-scoped for parallel safety; reports leaking/order-dependent tests
+/testctl:hooks-guard           # Frappe hooks.py wiring: doc_events fire, permission_query_conditions restricts (forbidden row absent), scheduler/override paths resolve — reads your own hooks.py
 ```
 
 These guards are universal — each reads your project's own config (tax rates, auth/roles, currency
@@ -208,6 +209,15 @@ permutation actually changed) and asserts the same result — reporting a leakin
 (and, on Frappe, a write-without-rollback or a `frappe.db.commit()` that defeats the rollback) rather
 than rewriting it. Distinct from `test-audit` (a static lint) and `flaky-hunter` (runs a suite N
 times) — this adds a deterministic proof.
+
+`hooks-guard` is Frappe-specific: a Frappe app wires behavior through `hooks.py` by magic STRING paths,
+so a renamed or mistyped handler breaks the feature in production with NO error. It reads your app's own
+`hooks.py` and proves the wiring takes effect — it triggers each `doc_events` handler and asserts its
+observable effect, seeds a permitted + a forbidden row and asserts `permission_query_conditions` leaves
+the forbidden row ABSENT (a broken filter silently leaks ALL rows — a real data leak), and resolves each
+`scheduler_events` / `override_*` path to a real callable. It reports a hook that doesn't fire or doesn't
+restrict rather than rewriting `hooks.py`. Complements `permissions-guard` (which asserts the access
+policy) by proving the wiring that delivers it.
 
 ## Run history
 

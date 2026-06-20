@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.56.0] - 2026-06-20
+
+### Added
+- **`hooks-guard` skill** (28th) — Frappe/ERPNext-only guard that PROVES the app's `hooks.py` wiring
+  actually fires. hooks.py wires behavior by magic STRING paths, so a renamed or mistyped handler breaks
+  the feature in production with NO error and a green unit suite. Reads the app's OWN `hooks.py` (never a
+  hardcoded list) and guards the four most error-prone families: **doc_events** (trigger the real event —
+  incl. the `"*"` wildcard — and assert the handler's observable effect; if only registration is
+  checkable, also assert the path resolves to an importable callable, so a renamed handler is caught);
+  **permission_query_conditions / has_permission** (the headline — seed a permitted + a forbidden row and
+  assert as a limited user that `frappe.get_list` leaves the **forbidden row ABSENT**; a broken filter
+  silently returns ALL rows — a real data leak; a permitted-only assertion is vacuous and forbidden);
+  **scheduler_events** (assert each declared job path resolves to a real callable; a mistyped path = a
+  job that never runs); **override_whitelisted_methods / override_doctype_class** (assert registered AND
+  resolves to the overriding class/method). Reports a hook that doesn't fire or doesn't restrict (with the
+  hook + handler path) for `/testctl:fix-failures` — never rewrites `hooks.py` or app code, never weakens
+  an assertion. Reuses existing masters; stubs outbound calls via `mock-externals`; Frappe runs only on an
+  `allow_tests` site; leaves changes uncommitted. Markdown-only — NO engine changes (262 tests stay
+  green). Skills → 28.
+
 ## [1.55.1] - 2026-06-20
 
 ### Changed
