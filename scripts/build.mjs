@@ -2,10 +2,12 @@
 // dependency-free file at dist/testctl.mjs, so the Claude Code plugin runs after a plain
 // `git clone` with no `npm install` and no network.
 import { build } from 'esbuild';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const pkgVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
 // Output CJS (not ESM): the engine's deps (yaml, fast-xml-parser) are CommonJS and use
 // dynamic require() of Node built-ins, which is unsupported in an ESM bundle. A CJS bundle
@@ -32,6 +34,6 @@ await build({
   platform: 'node',
   format: 'cjs',
   target: 'node20',
-  define: { TESTCTL_MCP_BUNDLE: 'true' },
+  define: { TESTCTL_MCP_BUNDLE: 'true', TESTCTL_MCP_VERSION: JSON.stringify(pkgVersion) },
 });
 console.log('built dist/testctl-mcp.cjs');

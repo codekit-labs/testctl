@@ -33481,32 +33481,36 @@ function buildContextResponse(apps) {
 }
 
 // bin/testctl-mcp.mjs
+var __pkgVersion = true ? "1.56.1" : "dev";
 var projectDir = process.env.TESTCTL_PROJECT_DIR || process.cwd();
-var server = new McpServer({ name: "testctl", version: "1.57.0" });
+var server = new McpServer({ name: "testctl", version: __pkgVersion });
 var ok = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj) }], structuredContent: obj });
 server.registerTool(
   "testctl_run",
   {
     title: "Run tests",
-    description: "Discover and run the project's tests (Frappe/Flutter/Electron/Next.js/Supabase/Web/E2E) and return structured results, failures, and exit code. Optionally scope to a stack/path or to changed files, and request coverage.",
+    description: "Discover and run the project's tests (Frappe/Flutter/Electron/Next.js/Supabase/Web/E2E) and return structured results, failures, and exit code. Optionally scope to a stack or to changed files, and request coverage.",
     inputSchema: {
       stack: external_exports.enum(STACKS).optional(),
-      path: external_exports.string().optional(),
       changed: external_exports.boolean().optional(),
       coverage: external_exports.boolean().optional()
     }
   },
-  async ({ stack, path, changed, coverage }) => {
-    const core = await runProject(projectDir, {
-      only: stack || null,
-      coverage: !!coverage,
-      changed: changed ? { ref: null } : null
-    });
+  async ({ stack, changed, coverage }) => {
     try {
-      saveLastRun(projectDir, core.results, (/* @__PURE__ */ new Date()).toISOString());
-    } catch {
+      const core = await runProject(projectDir, {
+        only: stack || null,
+        coverage: !!coverage,
+        changed: changed ? { ref: null } : null
+      });
+      try {
+        saveLastRun(projectDir, core.results, (/* @__PURE__ */ new Date()).toISOString());
+      } catch {
+      }
+      return ok(buildRunResponse(core));
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: String(err && err.message || err) }) }], isError: true };
     }
-    return ok(buildRunResponse(core));
   }
 );
 server.registerTool(
@@ -33516,7 +33520,13 @@ server.registerTool(
     description: "Recall the last test run's failure digest from .testctl/last-run.json WITHOUT re-running. Returns hasRun, results, failures, and a human text summary.",
     inputSchema: {}
   },
-  async () => ok(buildDigestResponse(loadLastRun(projectDir)))
+  async () => {
+    try {
+      return ok(buildDigestResponse(loadLastRun(projectDir)));
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: String(err && err.message || err) }) }], isError: true };
+    }
+  }
 );
 server.registerTool(
   "testctl_context",
@@ -33525,7 +33535,13 @@ server.registerTool(
     description: "Per-app situational digest: which apps have tests, status, coverage, untested symbols, and the recommended action (generate/fix/boost/harden/ok). Read-only; does not run tests.",
     inputSchema: { stack: external_exports.enum(STACKS).optional() }
   },
-  async ({ stack }) => ok(buildContextResponse(buildContextApps(projectDir, stack || null)))
+  async ({ stack }) => {
+    try {
+      return ok(buildContextResponse(buildContextApps(projectDir, stack || null)));
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: String(err && err.message || err) }) }], isError: true };
+    }
+  }
 );
 (async () => {
   await server.connect(new StdioServerTransport());
