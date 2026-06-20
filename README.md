@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/codekit-labs/testctl/actions/workflows/ci.yml/badge.svg)](https://github.com/codekit-labs/testctl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/testctl.svg)](https://www.npmjs.com/package/testctl)
+[![npm downloads](https://img.shields.io/npm/dm/testctl.svg)](https://www.npmjs.com/package/testctl)
 
 One command to run **Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue
 via Vitest/Jest), and E2E (Playwright / Flutter integration_test)** tests and get a single unified report with a CI-friendly exit code.
@@ -9,6 +11,15 @@ via Vitest/Jest), and E2E (Playwright / Flutter integration_test)** tests and ge
 `testctl` auto-detects which stacks exist in your project, runs only those (each
 independently — a missing stack is skipped, never failed), and merges the results. It ships
 as a **Claude Code plugin**, so failures are explained inline.
+
+## Install
+
+```
+npx testctl doctor      # run instantly, no install
+npm i -g testctl        # or install the CLI globally
+```
+
+testctl also ships as a **Claude Code plugin** and an **MCP server** (see below).
 
 ## Install (Claude Code plugin)
 

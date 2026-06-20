@@ -1,6 +1,6 @@
 {
   "name": "testctl",
-  "version": "1.57.1",
+  "version": "1.57.2",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue via Vitest/Jest), and E2E (Playwright / Flutter integration_test) tests with one command and a unified report. Ships as a Claude Code plugin.",
   "keywords": [
     "testing",
@@ -30,7 +30,7 @@
   "homepage": "https://github.com/codekit-labs/testctl",
   "repository": {
     "type": "git",
-    "url": "https://github.com/codekit-labs/testctl.git"
+    "url": "git+https://github.com/codekit-labs/testctl.git"
   },
   "type": "module",
   "bin": {

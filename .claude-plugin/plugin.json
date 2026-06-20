@@ -1,7 +1,7 @@
 {
   "name": "testctl",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue) and end-to-end (Playwright / Flutter integration_test) tests with one command and a unified report.",
-  "version": "1.57.1",
+  "version": "1.57.2",
   "author": {
     "name": "Sammish Thundiyil",
     "email": "sammish.thundiyil@gmail.com"

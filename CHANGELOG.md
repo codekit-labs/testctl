@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.57.2] - 2026-06-20
+
+### Changed
+- Packaging/docs: published to npm — `npx testctl` / `npm i -g testctl` now work. Added npm version +
+  downloads badges and an Install section to the README; ran `npm pkg fix` (normalized `repository.url`).
+
 ## [1.57.1] - 2026-06-20
 
 ### Fixed
