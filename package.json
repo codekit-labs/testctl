@@ -1,6 +1,6 @@
 {
   "name": "testctl",
-  "version": "1.56.1",
+  "version": "1.57.0",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue via Vitest/Jest), and E2E (Playwright / Flutter integration_test) tests with one command and a unified report. Ships as a Claude Code plugin.",
   "keywords": [
     "testing",
@@ -21,7 +21,9 @@
     "claude-code",
     "plugin",
     "test-runner",
-    "ci"
+    "ci",
+    "mcp",
+    "model-context-protocol"
   ],
   "license": "MIT",
   "author": "Sammish Thundiyil <sammish.thundiyil@gmail.com>",

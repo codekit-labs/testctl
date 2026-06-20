@@ -1,7 +1,7 @@
 {
   "name": "testctl",
   "description": "Run Frappe, Flutter, Electron, Next.js (Vercel), Supabase, Web (React/Vue) and end-to-end (Playwright / Flutter integration_test) tests with one command and a unified report.",
-  "version": "1.56.1",
+  "version": "1.57.0",
   "author": {
     "name": "Sammish Thundiyil",
     "email": "sammish.thundiyil@gmail.com"
@@ -9,5 +9,11 @@
   "homepage": "https://github.com/codekit-labs/testctl",
   "repository": "https://github.com/codekit-labs/testctl",
   "license": "MIT",
-  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "web", "react", "vue", "vitest", "jest", "e2e", "playwright", "integration-test", "claude-code", "plugin"]
+  "keywords": ["testing", "cli", "frappe", "flutter", "electron", "nextjs", "supabase", "web", "react", "vue", "vitest", "jest", "e2e", "playwright", "integration-test", "claude-code", "plugin", "mcp", "model-context-protocol", "mcp-server"],
+  "mcpServers": {
+    "testctl": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/testctl-mcp.cjs"]
+    }
+  }
 }

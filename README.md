@@ -594,6 +594,40 @@ Password auth uses `sshpass` (install it) and reads the password from the env va
 line). Prefer keys or `passwordEnv` over an inline `password`. Remote runs report pass/fail
 (coverage is local-only for now).
 
+## Use from any agent (MCP server)
+
+testctl is also an **MCP server** (stdio), so any MCP client — Cursor, Windsurf, Cline, Claude Desktop,
+custom agents, CI bots — can run your tests and get structured results, not scraped text. Three read/data
+tools (your agent does any fixing):
+
+- `testctl_run` — run tests (optional `stack`/`path`, `changed`, `coverage`); returns `{ results,
+  failures, exitCode, patchCoverage }`.
+- `testctl_digest` — recall the last run's failures from `.testctl/last-run.json` (no re-run).
+- `testctl_context` — per-app digest: status, coverage, untested symbols, recommended action.
+
+### Add it to your MCP client
+
+```json
+{
+  "mcpServers": {
+    "testctl": {
+      "command": "node",
+      "args": ["/ABS/PATH/TO/testctl/dist/testctl-mcp.cjs"]
+    }
+  }
+}
+```
+
+The server tests the project in its working directory. Set the client's `cwd` to your project, or set
+`TESTCTL_PROJECT_DIR=/abs/project` in the server's `env`.
+
+### Inside Claude Code
+
+The testctl plugin already wires the MCP server in (`plugin.json` `mcpServers`), so the three tools are
+available automatically alongside the testctl skills and commands — no extra config.
+
+No `npm install` needed: the SDK is bundled into `dist/testctl-mcp.cjs`.
+
 ## Development
 
 ```bash

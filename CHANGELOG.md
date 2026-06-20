@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.57.0] - 2026-06-20
+
+### Added
+- **MCP server mode** (`dist/testctl-mcp.cjs`, stdio): testctl is now also a Model Context Protocol
+  server, so any MCP client (Cursor, Windsurf, Cline, Claude Desktop, custom agents, CI bots) can drive
+  it. Three read/data tools: `testctl_run` (structured results/failures/exitCode/patchCoverage),
+  `testctl_digest` (recall last run, no re-run), `testctl_context` (per-app digest + action).
+- `plugin.json` declares the MCP server (`mcpServers`), so the tools are available inside Claude Code too.
+- Pure response builders in `lib/mcp.mjs` (`buildRunResponse`/`buildDigestResponse`/`buildContextResponse`),
+  unit-tested without loading the SDK; a guarded stdio startup smoke (`tools/list` + `tools/call`).
+
+### Changed
+- Extracted a reusable `runProject(projectDir, opts)` core from `cmdRun` (behavior-preserving; the CLI's
+  output/exit/files are unchanged) so the CLI and the `testctl_run` tool share one run path.
+
+### Notes
+- `@modelcontextprotocol/sdk` (v1) + `zod` are devDependencies bundled by esbuild into the SEPARATE
+  artifact `dist/testctl-mcp.cjs`; the CLI bundle `dist/testctl.cjs` stays dependency-free and unchanged.
+
 ## [1.56.1] - 2026-06-20
 
 ### Changed
