@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.56.1] - 2026-06-20
+
+### Changed
+- **`hooks-guard`** — closed a vacuous-green hole on the headline permission check: `permission_query_conditions`
+  is bypassed for Administrator and System Manager, so the test must run as a GENUINELY restricted (non-Admin,
+  non-System-Manager) user, and must cross-check that the SAME query AS ADMINISTRATOR returns BOTH rows — proving
+  the forbidden row is hidden by the filter, not by a role bypass or by simply not existing. Also: doc_events note
+  that on_submit/on_cancel require a submittable doctype, and scheduler paths must resolve the exact configured string.
+
 ## [1.56.0] - 2026-06-20
 
 ### Added

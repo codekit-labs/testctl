@@ -49,7 +49,10 @@ project has no Frappe app, say so and stop.
    - **Trigger the real event** on a lightweight doc of the wired doctype (save / submit / cancel) and
      assert the handler's **observable effect** — a field it sets, a value it computes, or an exception
      it raises on invalid input. For the `"*"` wildcard, trigger the event on one doctype and assert its
-     cross-cutting effect (e.g. an audit row, a flag).
+     cross-cutting effect (e.g. an audit row, a flag). **Event applicability:** trigger the event that
+     matches the wired method — `on_submit` / `on_cancel` / `on_update_after_submit` require a
+     SUBMITTABLE doctype (`is_submittable`); pick a doc whose lifecycle actually reaches the wired event,
+     or the handler silently never runs / errors.
    - **Anti-vacuous-green:** it is NOT enough that `frappe.get_hooks("doc_events")` contains the string —
      a string can be present but point at a renamed function. **Prefer triggering the event and asserting
      the effect.** If a test can only check registration (the effect is not cleanly observable), it must
@@ -63,9 +66,18 @@ project has no Frappe app, say so and stop.
    - **Seed BOTH a permitted and a forbidden record** for the wired doctype.
    - As a **limited-role user** (`frappe.set_user(...)`), call `frappe.get_list(doctype)` (which applies
      `permission_query_conditions`) and assert the **forbidden row is ABSENT** from the result — and that
-     the permitted row is present. For `has_permission`, assert `frappe.has_permission(doc=forbidden,
-     user=...)` is **False** and **True** for the permitted doc. Restore the user
-     (`frappe.set_user("Administrator")`) in teardown.
+     the permitted row is present. The restricted user must be a **genuinely restricted user**: a
+     non-Administrator, non-System-Manager user whose role grants read on the doctype but relies on the
+     `permission_query_condition` to scope rows. Administrator and System Manager **bypass
+     `permission_query_conditions` entirely** — a test run as either is **vacuously green and proves
+     nothing**. Restore the user (`frappe.set_user("Administrator")`) in teardown. For `has_permission`,
+     assert `frappe.has_permission(doc=forbidden, user=...)` is **False** and **True** for the permitted
+     doc.
+   - **Administrator-sees-both cross-check (mandatory):** also assert that the SAME `get_list`/`get_all`
+     query run **as Administrator** returns **BOTH** the permitted AND the forbidden row. This proves the
+     forbidden row actually exists in the database and is hidden by the filter — not by a role bypass or
+     by the row simply not existing. The test is only meaningful when: Administrator sees both rows, the
+     restricted user sees only the permitted one.
    - **Anti-vacuous-green (mandatory):** asserting only that permitted rows appear is **vacuous** — an
      all-rows leak still shows the permitted rows, so a permitted-only check passes on a fully broken
      filter. The **forbidden-row-absent** assertion is the load-bearing check and must be present.
@@ -74,12 +86,13 @@ project has no Frappe app, say so and stop.
      This is the real data leak no other skill catches.
 
 4. **`scheduler_events` — prove each job path RESOLVES.** Covers `all` / `daily` / `hourly` / `weekly`
-   / `monthly` / `cron`. For each declared job string, assert the path **resolves to a real importable
-   callable** (`frappe.get_attr(path)` / import succeeds and the result is callable). Optionally, only if
-   the job is safe and side-effect-free (or its externals are stubbed via `mock-externals`), invoke it in
-   a controlled way inside a `FrappeTestCase` and assert it does not raise. **Never trigger the live
-   scheduler** (`bench scheduler` / enqueue). A mistyped scheduler path = a job that never runs and is
-   never noticed → the resolve assertion fails.
+   / `monthly` / `cron`. For each declared job string, resolve the **exact string taken from the hook**
+   (via `frappe.get_hooks("scheduler_events")`, not a hand-retyped path) and assert it **resolves to a
+   real importable callable** (`frappe.get_attr(path)` / import succeeds and the result is callable).
+   Optionally, only if the job is safe and side-effect-free (or its externals are stubbed via
+   `mock-externals`), invoke it in a controlled way inside a `FrappeTestCase` and assert it does not
+   raise. **Never trigger the live scheduler** (`bench scheduler` / enqueue). A mistyped scheduler path =
+   a job that never runs and is never noticed → the resolve assertion fails.
 
 5. **`override_whitelisted_methods` / `override_doctype_class` — prove the override is IN EFFECT.**
    Assert the override is registered (`frappe.get_hooks(...)` lists the mapping) **and** that it actually
@@ -114,12 +127,18 @@ project has no Frappe app, say so and stop.
   observable effect; if only registration is checkable, ALSO assert the path resolves to an importable
   callable. A bare "the hooks dict contains this string" assertion is forbidden — it passes on a renamed
   handler.
-- **Permission filters: forbidden row ABSENT (mandatory).** Seed BOTH a permitted and a forbidden row;
-  assert the forbidden row is absent from `frappe.get_list` as a limited user. A permitted-only
-  assertion is vacuous — an all-rows leak still shows the permitted rows.
-- **Scheduler / override paths must RESOLVE to a callable.** Registration is necessary but not
-  sufficient — a present-but-dangling string is the exact bug; resolve the path (and optionally invoke
-  when safe).
+- **Permission filters: restricted user + forbidden row ABSENT + Administrator-sees-both (mandatory).**
+  Seed BOTH a permitted and a forbidden row. Run the restricted query as a **genuinely restricted user**:
+  a non-Administrator, non-System-Manager user whose role grants read on the doctype but relies on the
+  `permission_query_condition` to scope rows (`frappe.set_user(...)`; restore in teardown).
+  Administrator and System Manager **bypass `permission_query_conditions` entirely** — a test run as
+  either is vacuously green and proves nothing. Also assert that the SAME `get_list`/`get_all` query run
+  **as Administrator** returns **BOTH** the permitted AND the forbidden row — this proves the forbidden
+  row exists and is hidden by the filter, not by a role bypass or by the row simply not existing.
+- **Scheduler / override paths must RESOLVE to a callable using the exact configured string.** Resolve
+  the exact path taken from `frappe.get_hooks(...)`, not a hand-retyped copy. Registration is necessary
+  but not sufficient — a present-but-dangling string is the exact bug; resolve the path (and optionally
+  invoke when safe).
 - Reuse existing masters; never create heavyweight records that trigger framework setup cascades.
   Stub outbound calls (email/PDF/HTTP) via `mock-externals` when a handler or job calls out.
 - Additive only — new test files; never modify `hooks.py` or other app code. A real wiring bug is
