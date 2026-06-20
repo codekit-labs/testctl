@@ -9,6 +9,7 @@ import { mapPool } from '../lib/pool.mjs';
 import { historyEntry, appendHistory, summarize, formatHistoryReport } from '../lib/history.mjs';
 import { saveLastRun, loadLastRun, formatDigest } from '../lib/lastrun.mjs';
 import { parseFirstBadCommit, buildBisectCriterion, formatBisectResult } from '../lib/bisect.mjs';
+import { computeTrend, formatTrend } from '../lib/trend.mjs';
 import { homedir } from 'node:os';
 import { buildInitYaml, scanProject } from '../lib/init.mjs';
 import { buildWorkflowYaml, buildGitlabYaml } from '../lib/ci.mjs';
@@ -288,6 +289,26 @@ function cmdReport(projectDir) {
   return 0;
 }
 
+// `testctl trend [--window=N]` — read the run history testctl already persists and show the
+// trajectory: per-app sparkline, pass-rate + coverage direction over the last N runs, and which apps
+// newly regressed (green→red) or are improving (red→green). Read-only, exit 0 always (a recall, not a
+// gate). Prints a machine-readable TESTCTL_TREND json line for tooling.
+function cmdTrend(projectDir, window) {
+  const path = join(projectDir, '.testctl', 'history.jsonl');
+  let text = '';
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    text = '';
+  }
+  const trend = computeTrend(text, { window });
+  console.log(formatTrend(trend));
+  if (trend.totalRuns > 0) {
+    console.log('TESTCTL_TREND ' + JSON.stringify(trend));
+  }
+  return 0;
+}
+
 // `testctl digest` — recall the last run's failure digest from .testctl/last-run.json
 // WITHOUT re-running. Read-only, exit 0; prints a TESTCTL_DIGEST json line for tooling.
 function cmdDigest(projectDir) {
@@ -516,6 +537,12 @@ async function main() {
   if (cmd === 'doctor') return process.exit(cmdDoctor(projectDir));
   if (cmd === 'preflight') return process.exit(cmdPreflight(projectDir));
   if (cmd === 'report') return process.exit(cmdReport(projectDir));
+  if (cmd === 'trend') {
+    const rest = process.argv.slice(3);
+    const windowEntry = rest.find((a) => a.startsWith('--window='));
+    const window = Math.max(2, Math.floor(Number((windowEntry || '').split('=')[1])) || 10);
+    return process.exit(cmdTrend(projectDir, window));
+  }
   if (cmd === 'explain') return process.exit(cmdExplain(projectDir));
   if (cmd === 'digest') return process.exit(cmdDigest(projectDir));
   if (cmd === 'bisect') {
@@ -583,7 +610,7 @@ async function main() {
     if (watch) { await cmdWatch(projectDir, runOnce); return; }
     return process.exit(await runOnce());
   }
-  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context');
+  console.log('Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl trend [--window=N]   (is testing getting better or worse over the last N runs?)\n  testctl explain\n  testctl digest   (recall last run\'s failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context');
   return process.exit(cmd ? 2 : 0);
 }
 

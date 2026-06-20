@@ -9963,6 +9963,125 @@ function formatBisectResult({ firstBad, subject, criterionLabel }) {
   ].join("\n");
 }
 
+// lib/trend.mjs
+function parseEntries(text) {
+  const entries = [];
+  for (const lineText of String(text == null ? "" : text).split("\n")) {
+    const t = lineText.trim();
+    if (!t) continue;
+    try {
+      entries.push(JSON.parse(t));
+    } catch {
+    }
+  }
+  return entries;
+}
+function passRate(oks) {
+  if (oks.length === 0) return 0;
+  const ok = oks.filter(Boolean).length;
+  return Math.round(ok / oks.length * 100);
+}
+function dirOf(delta) {
+  if (delta > 0) return "up";
+  if (delta < 0) return "down";
+  return "flat";
+}
+function computeTrend(historyText, { window: window2 = 10 } = {}) {
+  const all = parseEntries(historyText);
+  const w = Math.max(2, Math.floor(Number(window2)) || 10);
+  const entries = all.slice(-w);
+  const order = [];
+  const acc = {};
+  for (const e of entries) {
+    for (const a of e.apps || []) {
+      const key = `${a.stack} (${a.label})`;
+      if (!acc[key]) {
+        acc[key] = { stack: a.stack, label: a.label, series: [] };
+        order.push(key);
+      }
+      acc[key].series.push({ ok: !!a.ok, errored: !!a.errored, coverage: a.coverage ?? null });
+    }
+  }
+  const apps = {};
+  const regressedKeys = [];
+  const improvedKeys = [];
+  for (const key of order) {
+    const series = acc[key].series.map((s) => ({ ok: s.ok, coverage: s.coverage }));
+    const raw = acc[key].series;
+    const runs = raw.length;
+    const sparkline = raw.map((s) => s.ok ? "\u2713" : s.errored ? "\xB7" : "\u2717").join("");
+    const mid = Math.floor(runs / 2);
+    const firstHalf = raw.slice(0, mid).map((s) => s.ok);
+    const secondHalf = raw.slice(mid).map((s) => s.ok);
+    const passRatePrev = passRate(firstHalf);
+    const passRateNow = passRate(secondHalf);
+    const passDir = runs < 2 ? "flat" : dirOf(passRateNow - passRatePrev);
+    const covVals = raw.map((s) => s.coverage).filter((c) => c != null);
+    const coverageFirst = covVals.length ? covVals[0] : null;
+    const coverageNow = covVals.length ? covVals[covVals.length - 1] : null;
+    const coverageDelta = coverageFirst != null && coverageNow != null ? Math.round(coverageNow - coverageFirst) : null;
+    const coverageDir = coverageDelta == null ? "flat" : dirOf(coverageDelta);
+    const latestOk = raw[runs - 1].ok;
+    const earlierOks = raw.slice(0, runs - 1).map((s) => s.ok);
+    const regressed = latestOk === false && earlierOks.some((ok) => ok === true);
+    const improved = latestOk === true && earlierOks.some((ok) => ok === false);
+    if (regressed) regressedKeys.push(key);
+    if (improved) improvedKeys.push(key);
+    apps[key] = {
+      stack: acc[key].stack,
+      label: acc[key].label,
+      runs,
+      series,
+      sparkline,
+      passRatePrev,
+      passRateNow,
+      passDir,
+      coverageFirst,
+      coverageNow,
+      coverageDelta,
+      coverageDir,
+      regressed,
+      improved
+    };
+  }
+  return { window: w, totalRuns: entries.length, apps, regressedKeys, improvedKeys };
+}
+var ARROW = { up: "\u2191", down: "\u2193", flat: "\u2192" };
+function formatTrend(trend) {
+  if (!trend || trend.totalRuns === 0) {
+    return "No run history yet \u2014 run `testctl run` first.";
+  }
+  const lines = [
+    `testctl trend \u2014 last ${trend.totalRuns} run${trend.totalRuns === 1 ? "" : "s"} (window ${trend.window})`,
+    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    `  ${"App".padEnd(28)} ${"Trend".padEnd(12)} ${"Pass".padStart(5)}  ${"Coverage".padEnd(12)}  Status`
+  ];
+  for (const [key, a] of Object.entries(trend.apps)) {
+    const spark = a.sparkline.padEnd(12);
+    const pass = `${ARROW[a.passDir]}${String(a.passRateNow).padStart(3)}%`;
+    let cov;
+    if (a.coverageNow == null) {
+      cov = "\u2014";
+    } else if (a.coverageDelta != null && a.coverageDelta !== 0) {
+      const sign = a.coverageDelta > 0 ? "+" : "";
+      cov = `${ARROW[a.coverageDir]}${a.coverageNow}% (${sign}${a.coverageDelta})`;
+    } else {
+      cov = `${ARROW[a.coverageDir]}${a.coverageNow}%`;
+    }
+    const status = a.regressed ? "REGRESSED" : a.improved ? "improved" : "steady";
+    lines.push(`  ${key.padEnd(28)} ${spark} ${pass}  ${cov.padEnd(12)}  ${status}`);
+  }
+  lines.push("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+  if (trend.regressedKeys.length) {
+    lines.push(`\u26A0 ${trend.regressedKeys.length} app(s) newly failing: ${trend.regressedKeys.join(", ")}`);
+  } else if (trend.improvedKeys.length) {
+    lines.push(`\u2713 ${trend.improvedKeys.length} app(s) improving: ${trend.improvedKeys.join(", ")}`);
+  } else {
+    lines.push("\u2713 all steady \u2014 no newly failing apps in the window.");
+  }
+  return lines.join("\n");
+}
+
 // bin/cli.mjs
 var import_node_os8 = require("node:os");
 
@@ -11886,6 +12005,21 @@ function cmdReport(projectDir) {
   console.log(formatHistoryReport(summarize(text)));
   return 0;
 }
+function cmdTrend(projectDir, window2) {
+  const path = (0, import_node_path17.join)(projectDir, ".testctl", "history.jsonl");
+  let text = "";
+  try {
+    text = (0, import_node_fs17.readFileSync)(path, "utf8");
+  } catch {
+    text = "";
+  }
+  const trend = computeTrend(text, { window: window2 });
+  console.log(formatTrend(trend));
+  if (trend.totalRuns > 0) {
+    console.log("TESTCTL_TREND " + JSON.stringify(trend));
+  }
+  return 0;
+}
 function cmdDigest(projectDir) {
   const record = loadLastRun(projectDir);
   console.log(formatDigest(record));
@@ -12104,6 +12238,12 @@ async function main() {
   if (cmd === "doctor") return process.exit(cmdDoctor(projectDir));
   if (cmd === "preflight") return process.exit(cmdPreflight(projectDir));
   if (cmd === "report") return process.exit(cmdReport(projectDir));
+  if (cmd === "trend") {
+    const rest = process.argv.slice(3);
+    const windowEntry = rest.find((a) => a.startsWith("--window="));
+    const window2 = Math.max(2, Math.floor(Number((windowEntry || "").split("=")[1])) || 10);
+    return process.exit(cmdTrend(projectDir, window2));
+  }
   if (cmd === "explain") return process.exit(cmdExplain(projectDir));
   if (cmd === "digest") return process.exit(cmdDigest(projectDir));
   if (cmd === "bisect") {
@@ -12171,7 +12311,7 @@ async function main() {
     }
     return process.exit(await runOnce());
   }
-  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context");
+  console.log("Usage:\n  testctl init [--ci[=github|gitlab]]\n  testctl doctor\n  testctl preflight   (Frappe test-readiness)\n  testctl run [frappe|flutter|electron|nextjs|supabase|web|e2e] [--coverage] [--min-coverage=N] [--concurrency=N] [--changed[=ref]] [--changed-coverage-min=N] [--quiet] [--cache] [--report-junit[=path]] [--report-sarif[=path]] [--report-html[=path]] [--report-md[=path]] [--retry=N] [--notify=url] [--watch]\n  testctl report\n  testctl trend [--window=N]   (is testing getting better or worse over the last N runs?)\n  testctl explain\n  testctl digest   (recall last run's failure digest, no re-run)\n  testctl bisect --good <ref> [--bad <ref>] [stack-or-path] [--test <substr>]   (find the commit that turned tests red)\n  testctl context");
   return process.exit(cmd ? 2 : 0);
 }
 main();

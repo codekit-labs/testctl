@@ -215,3 +215,20 @@ test('formatTrend: regressed app surfaced in footer, improving tagged', () => {
   assert.match(out, /newly failing/);
   assert.match(out, /web \(ui\)/);
 });
+
+// Minor fix guard: a brand-new app present in only the latest window run must not show a spurious
+// ↑100% direction (passDir='up'). With only one run firstHalf is empty → passRatePrev=0 would
+// yield dirOf(100-0)='up'. The fix clamps single-run series to passDir='flat'.
+test('brand-new app (single run in window) has passDir flat — no spurious up direction', () => {
+  // Two runs: first run has only 'frappe (erp)', second run introduces 'web (ui)' for the first time.
+  const t = computeTrend(
+    jsonl(
+      [{ stack: 'frappe', label: 'erp', ok: true }],
+      [{ stack: 'frappe', label: 'erp', ok: true }, { stack: 'web', label: 'ui', ok: true }],
+    ),
+    {},
+  );
+  // web (ui) appears in only 1 run — should be flat, never up
+  assert.equal(t.apps['web (ui)'].runs, 1);
+  assert.equal(t.apps['web (ui)'].passDir, 'flat', 'single-run app must have passDir flat');
+});
