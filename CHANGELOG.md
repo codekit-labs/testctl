@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.54.0] - 2026-06-20
+
+### Added
+- **`i18n-guard` skill** (26th) — protects internationalization correctness, derived from the project's
+  OWN configured locales (never hardcodes a language; Arabic / RTL is just the common instance). Three
+  invariant families: **translation completeness / key parity** (every configured locale covers the base
+  locale's key-set with no missing or empty values — flatten nested keys first — plus a REPORT of
+  hardcoded user-facing strings not wrapped in the i18n function), **RTL directionality** (render under
+  both `rtl` and `ltr` with logical start/end and no overflow — Flutter `Directionality`, Web
+  `dir="rtl"`/`dir="ltr"`; REPORT physical `left`/`right`), and **locale-aware display formatting**
+  (numbers/dates/currency DISPLAY per the active locale — distinct from money-guard/date-tz-guard which
+  own the math; only when the app formats for display). Per stack: Flutter `intl`/ARB key parity across
+  `lib/l10n`; Frappe `_()`/`frappe._` + translation `.csv`/`.po` parity for the configured languages;
+  Web react-i18next / vue-i18n locale-JSON key parity. Reports real gaps for the user — never
+  auto-translates, never rewrites app code, never weakens an assertion to pass. Additive (new test files
+  only); Frappe runs only on an `allow_tests` site; leaves changes uncommitted. Markdown-only — NO engine
+  changes (262 tests stay green). Skills → 26.
+
 ## [1.53.0] - 2026-06-20
 
 ### Added

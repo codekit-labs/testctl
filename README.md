@@ -180,6 +180,7 @@ And three more for the rest of the lifecycle:
 /testctl:api-contract          # API: status codes, response shape, error envelope, auth, pagination
 /testctl:migration-guard       # Frappe data patches: idempotent, no data loss, intended transform (calls execute() directly)
 /testctl:perf-guard            # performance: no N+1 — expensive-call count must not grow with input size (deterministic, no wall-clock)
+/testctl:i18n-guard            # i18n: translation completeness / key parity, RTL directionality, locale-aware display — from your own locales
 ```
 
 These guards are universal — each reads your project's own config (tax rates, auth/roles, currency
@@ -193,6 +194,11 @@ each for idempotency, no-crash, the intended transformation, and no collateral d
 `perf-guard` pins performance as a deterministic invariant: it counts the DB queries / outbound calls
 an operation makes over a small vs larger record set and fails if the count scales with N (an N+1) —
 counts, not wall-clock, so the tests never flake.
+
+`i18n-guard` protects internationalization, derived from your own configured locales (never hardcoded):
+it asserts translation key-parity across every locale (no missing/empty keys), renders the UI under both
+RTL and LTR (logical start/end, no overflow), and checks numbers/dates display per the active locale —
+reporting hardcoded strings and physical left/right rather than rewriting them.
 
 ## Run history
 
